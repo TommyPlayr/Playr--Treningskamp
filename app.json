@@ -1,0 +1,25 @@
+{
+  "expo": {
+    "name": "Playr",
+    "slug": "playr-treningskamp",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#F8FBF7"
+    },
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "no.playr.treningskamp"
+    },
+    "android": {
+      "package": "no.playr.treningskamp"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
