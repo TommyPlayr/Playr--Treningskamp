@@ -472,9 +472,12 @@ export default function App() {
 
   useEffect(() => {
     const saved = readSeenNotificationIds(currentProfile.id);
-    setSeenIncomingIds(saved.incoming);
-    setSeenApprovedIds(saved.approved);
-  }, [currentProfile.id]);
+    const hasSavedIncoming = saved.incoming.length > 0;
+    const hasSavedApproved = saved.approved.length > 0;
+
+    setSeenIncomingIds(hasSavedIncoming ? saved.incoming : pendingIncomingIds);
+    setSeenApprovedIds(hasSavedApproved ? saved.approved : approvedMyRequestIds);
+  }, [currentProfile.id, pendingIncomingIds, approvedMyRequestIds]);
 
   useEffect(() => {
     saveSeenNotificationIds(currentProfile.id, seenIncomingIds, seenApprovedIds);
