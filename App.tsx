@@ -847,34 +847,20 @@ export default function App() {
   };
 
   const deleteMatch = (match: Match) => {
-    if (match.hostTeamId !== currentProfile.id || isDeletingMatch) {
+    if (isDeletingMatch) {
       return;
     }
 
-    if (Platform.OS === "web" && typeof window !== "undefined") {
-      const confirmed = window.confirm(
-        "Slette kamp?\n\nKampen fjernes helt, sammen med forespørsler og chat som hører til denne kampen."
-      );
-
-      if (confirmed) {
-        deleteMatchNow(match);
+    if (match.hostTeamId !== currentProfile.id) {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert("Du kan bare slette kamper du selv har lagt ut.");
+      } else {
+        Alert.alert("Kan ikke slette", "Du kan bare slette kamper du selv har lagt ut.");
       }
-
       return;
     }
 
-    Alert.alert(
-      "Slette kamp?",
-      "Kampen fjernes helt, sammen med forespørsler og chat som hører til denne kampen.",
-      [
-        { text: "Avbryt", style: "cancel" },
-        {
-          text: "Slett kamp",
-          style: "destructive",
-          onPress: () => deleteMatchNow(match)
-        }
-      ]
-    );
+    deleteMatchNow(match);
   };
 
   const deleteMatchNow = async (match: Match) => {
