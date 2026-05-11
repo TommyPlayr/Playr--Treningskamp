@@ -408,42 +408,74 @@ export default function App() {
   const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
   const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
 
+  const saveSeenNotificationCounts = (incoming: number, approved: number) => {
+    if (typeof window === "undefined" || !currentProfile.id) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      `playr-seen-notification-counts-${currentProfile.id}`,
+      JSON.stringify({ incoming, approved })
+    );
+  };
+
+  useEffect(() => {
+    if (!appDataReady || !currentProfile.id || typeof window === "undefined") {
+      return;
+    }
+
+    const key = `playr-seen-notification-counts-${currentProfile.id}`;
+    const shouldClear = new URLSearchParams(window.location.search).get("clearNotifications") === "1";
+    const saved = window.localStorage.getItem(key);
+
+    if (shouldClear || !saved) {
+      setSeenIncomingCount(pendingIncomingCount);
+      setSeenApprovedCount(approvedMyRequestsCount);
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({ incoming: pendingIncomingCount, approved: approvedMyRequestsCount })
+      );
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(saved);
+      setSeenIncomingCount(Number(parsed.incoming) || 0);
+      setSeenApprovedCount(Number(parsed.approved) || 0);
+    } catch {
+      setSeenIncomingCount(pendingIncomingCount);
+      setSeenApprovedCount(approvedMyRequestsCount);
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({ incoming: pendingIncomingCount, approved: approvedMyRequestsCount })
+      );
+    }
+  }, [appDataReady, currentProfile.id]);
+
   useEffect(() => {
     if (activeTab === "mine") {
       setSeenIncomingCount(pendingIncomingCount);
+      saveSeenNotificationCounts(pendingIncomingCount, seenApprovedCount);
     }
 
     if (activeTab === "inbox") {
       setSeenApprovedCount(approvedMyRequestsCount);
+      saveSeenNotificationCounts(seenIncomingCount, approvedMyRequestsCount);
     }
   }, [activeTab, pendingIncomingCount, approvedMyRequestsCount]);
 
   useEffect(() => {
-    if (seenIncomingCount > pendingIncomingCount) {
-      setSeenIncomingCount(pendingIncomingCount);
+    const nextIncoming = Math.min(seenIncomingCount, pendingIncomingCount);
+    const nextApproved = Math.min(seenApprovedCount, approvedMyRequestsCount);
+
+    if (nextIncoming !== seenIncomingCount) {
+      setSeenIncomingCount(nextIncoming);
     }
 
-    if (seenApprovedCount > approvedMyRequestsCount) {
-      setSeenApprovedCount(approvedMyRequestsCount);
+    if (nextApproved !== seenApprovedCount) {
+      setSeenApprovedCount(nextApproved);
     }
   }, [pendingIncomingCount, approvedMyRequestsCount, seenIncomingCount, seenApprovedCount]);
-
-  useEffect(() => {
-    const saved = readSeenNotificationCounts(currentProfile.id);
-
-    if (saved) {
-      setSeenIncomingCount(saved.incoming);
-      setSeenApprovedCount(saved.approved);
-      return;
-    }
-
-    setSeenIncomingCount(pendingIncomingCount);
-    setSeenApprovedCount(approvedMyRequestsCount);
-  }, [currentProfile.id, pendingIncomingCount, approvedMyRequestsCount]);
-
-  useEffect(() => {
-    saveSeenNotificationCounts(currentProfile.id, seenIncomingCount, seenApprovedCount);
-  }, [currentProfile.id, seenIncomingCount, seenApprovedCount]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
