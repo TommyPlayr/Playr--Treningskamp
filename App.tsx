@@ -285,6 +285,38 @@ const initialRequests: MatchRequest[] = [
 const initialMessages: ChatMessage[] = [
 ];
 
+const readSeenNotifications = (profileId: string) => {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return { incoming: 0, approved: 0 };
+  }
+
+  try {
+    const saved = window.localStorage.getItem(`playr-seen-notifications-${profileId}`);
+    if (!saved) {
+      return { incoming: 0, approved: 0 };
+    }
+
+    const parsed = JSON.parse(saved);
+    return {
+      incoming: Number(parsed.incoming) || 0,
+      approved: Number(parsed.approved) || 0
+    };
+  } catch {
+    return { incoming: 0, approved: 0 };
+  }
+};
+
+const saveSeenNotifications = (profileId: string, incoming: number, approved: number) => {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    `playr-seen-notifications-${profileId}`,
+    JSON.stringify({ incoming, approved })
+  );
+};
+
 const createEmptyForm = (profile: TeamProfile) => ({
   sport: profile.sport,
   title: "",
@@ -395,9 +427,14 @@ export default function App() {
   }, [pendingIncomingCount, approvedMyRequestsCount, seenIncomingCount, seenApprovedCount]);
 
   useEffect(() => {
-    setSeenIncomingCount(0);
-    setSeenApprovedCount(0);
+    const saved = readSeenNotifications(currentProfile.id);
+    setSeenIncomingCount(saved.incoming);
+    setSeenApprovedCount(saved.approved);
   }, [currentProfile.id]);
+
+  useEffect(() => {
+    saveSeenNotifications(currentProfile.id, seenIncomingCount, seenApprovedCount);
+  }, [currentProfile.id, seenIncomingCount, seenApprovedCount]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
