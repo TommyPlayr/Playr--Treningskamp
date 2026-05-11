@@ -298,6 +298,19 @@ const createEmptyForm = (profile: TeamProfile) => ({
   comment: ""
 });
 
+const createFormFromMatch = (match: Match) => ({
+  sport: match.sport,
+  title: match.title,
+  ageGroup: match.ageGroup,
+  level: match.level,
+  date: match.date,
+  time: match.time,
+  place: match.place,
+  city: match.city,
+  matchType: match.matchType,
+  comment: match.comment
+});
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [matches, setMatches] = useState<Match[]>(isSupabaseConfigured ? [] : initialMatches);
@@ -310,6 +323,7 @@ export default function App() {
   const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [createVisible, setCreateVisible] = useState(false);
+  const [editMatchId, setEditMatchId] = useState<string | null>(null);
   const [profileEditVisible, setProfileEditVisible] = useState(false);
   const [messageText, setMessageText] = useState("");
   const [chatFeedback, setChatFeedback] = useState<string | null>(null);
@@ -318,7 +332,10 @@ export default function App() {
   const [form, setForm] = useState(createEmptyForm(fallbackProfile));
   const [homeHeaderLogoVisible, setHomeHeaderLogoVisible] = useState(false);
   const [createFeedback, setCreateFeedback] = useState<string | null>(null);
+  const [editFeedback, setEditFeedback] = useState<string | null>(null);
   const [isPublishingMatch, setIsPublishingMatch] = useState(false);
+  const [isUpdatingMatch, setIsUpdatingMatch] = useState(false);
+  const [editForm, setEditForm] = useState(createEmptyForm(fallbackProfile));
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -327,6 +344,7 @@ export default function App() {
 
   const selectedMatch = matches.find((match) => match.id === selectedMatchId) ?? null;
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
+  const editingMatch = matches.find((match) => match.id === editMatchId) ?? null;
 
   const myHostedMatches = useMemo(
     () => matches.filter((match) => match.hostTeamId === currentProfile.id),
@@ -631,6 +649,128 @@ export default function App() {
       }
     } finally {
       setIsPublishingMatch(false);
+    }
+  };
+
+  const openEditMatch = (match: Match) => {
+    if (match.hostTeamId !== currentProfile.id) {
+      return;
+    }
+
+    setSelectedMatchId(null);
+    setEditForm(createFormFromMatch(match));
+    setEditFeedback(null);
+    setEditMatchId(match.id);
+  };
+
+  const updateHostedMatch = async () => {
+    const editingMatch = matches.find((match) => match.id === editMatchId) ?? null;
+
+    if (!editingMatch || isUpdatingMatch) {
+      return;
+    }
+
+    setEditFeedback(null);
+
+    const cleanForm = {
+      sport: editForm.sport,
+      title: editForm.title.trim(),
+      ageGroup: editForm.ageGroup.trim(),
+      level: editForm.level.trim(),
+      date: editForm.date.trim(),
+      time: editForm.time.trim(),
+      place: editForm.place.trim(),
+      city: editForm.city.trim(),
+      matchType: editForm.matchType.trim() || "Treningskamp",
+      comment: editForm.comment.trim()
+    };
+
+    if (
+      !cleanForm.title ||
+      !cleanForm.ageGroup ||
+      !cleanForm.level ||
+      !cleanForm.date ||
+      !cleanForm.time ||
+      !cleanForm.place ||
+      !cleanForm.city
+    ) {
+      setEditFeedback("Fyll inn tittel, alder, nivå, dato, tid, sted og by før du lagrer.");
+      return;
+    }
+
+    const databaseDate = parseDateForDatabase(cleanForm.date);
+    if (!databaseDate) {
+      setEditFeedback("Dato må skrives slik: 15.06.2026.");
+      return;
+    }
+
+    if (isPastDatabaseDate(databaseDate)) {
+      setEditFeedback("Dato kan ikke være før dagens dato.");
+      return;
+    }
+
+    const databaseTime = parseTimeForDatabase(cleanForm.time);
+    if (!databaseTime) {
+      setEditFeedback("Tid må skrives slik: 18:00.");
+      return;
+    }
+
+    const updatedMatch: Match = {
+      ...editingMatch,
+      title: cleanForm.title,
+      sport: cleanForm.sport,
+      ageGroup: cleanForm.ageGroup,
+      level: cleanForm.level,
+      date: formatDatabaseDateForDisplay(databaseDate),
+      time: databaseTime.slice(0, 5),
+      place: cleanForm.place,
+      city: cleanForm.city,
+      matchType: cleanForm.matchType,
+      comment: cleanForm.comment
+    };
+
+    const previousMatches = matches;
+    setMatches((current) => current.map((match) => (match.id === updatedMatch.id ? updatedMatch : match)));
+    setIsUpdatingMatch(true);
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from("matches")
+          .update({
+            sport: cleanForm.sport,
+            title: cleanForm.title,
+            age_group: cleanForm.ageGroup,
+            level: cleanForm.level,
+            match_date: databaseDate,
+            match_time: databaseTime,
+            place: cleanForm.place,
+            city: cleanForm.city,
+            match_type: cleanForm.matchType,
+            comment: cleanForm.comment
+          })
+          .eq("id", editingMatch.id)
+          .eq("host_team_id", currentProfile.id)
+          .select(
+            "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id, teams(club, team, contact_name)"
+          )
+          .single();
+
+        if (error) {
+          setMatches(previousMatches);
+          setEditFeedback(getReadableErrorMessage(error, "Kampen ble ikke lagret."));
+          return;
+        }
+
+        if (data) {
+          const savedMatch = mapDatabaseMatch(data as DatabaseMatchRow);
+          setMatches((current) => current.map((match) => (match.id === savedMatch.id ? savedMatch : match)));
+        }
+      }
+
+      setEditMatchId(null);
+    } finally {
+      setIsUpdatingMatch(false);
     }
   };
 
@@ -1248,6 +1388,16 @@ export default function App() {
         onSubmit={createMatch}
       />
 
+      <EditMatchModal
+        match={editingMatch}
+        form={editForm}
+        feedback={editFeedback}
+        isSaving={isUpdatingMatch}
+        onChange={setEditForm}
+        onClose={() => setEditMatchId(null)}
+        onSubmit={updateHostedMatch}
+      />
+
       <ProfileEditModal
         visible={profileEditVisible}
         profile={currentProfile}
@@ -1262,7 +1412,7 @@ export default function App() {
         isSendingRequest={isSendingRequest}
         onClose={() => setSelectedMatchId(null)}
         onSendRequest={sendRequest}
-        onEditMatch={showEditComingSoon}
+        onEditMatch={openEditMatch}
         onDeleteMatch={deleteHostedMatch}
       />
 
@@ -2238,6 +2388,86 @@ function CreateMatchModal({
               <Text style={styles.primaryButtonText}>
                 {isPublishing ? "Publiserer..." : "Publiser kamp"}
               </Text>
+            </Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function EditMatchModal({
+  match,
+  form,
+  feedback,
+  isSaving,
+  onChange,
+  onClose,
+  onSubmit
+}: {
+  match: Match | null;
+  form: ReturnType<typeof createEmptyForm>;
+  feedback: string | null;
+  isSaving: boolean;
+  onChange: (form: ReturnType<typeof createEmptyForm>) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  if (!match) {
+    return null;
+  }
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="pageSheet">
+      <SafeAreaView style={styles.modalSafe}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalKeyboard}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Rediger kamp</Text>
+            <Pressable onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView contentContainerStyle={styles.form}>
+            <Input label="Tittel" value={form.title} onChangeText={(title) => onChange({ ...form, title })} placeholder="Eks: FC Oslo G13 søker kamp" />
+
+            <Text style={styles.inputLabel}>Idrett</Text>
+            <View style={styles.pickerField}>
+              <Picker
+                selectedValue={form.sport}
+                onValueChange={(sport: Sport) => onChange({ ...form, sport })}
+              >
+                <Picker.Item label="Fotball" value="Fotball" />
+                <Picker.Item label="Håndball" value="Handball" />
+              </Picker>
+            </View>
+
+            <Input label="Alder" value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} placeholder="Eks: G13/J13" />
+            <Input label="Nivå" value={form.level} onChangeText={(level) => onChange({ ...form, level })} placeholder="Eks: Nivå 1, 2 eller 3" />
+            <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026" />
+            <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00" />
+            <Input label="Sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Bisset Stadion" />
+            <Input label="By/område" value={form.city} onChangeText={(city) => onChange({ ...form, city })} placeholder="Eks: Oslo" />
+            <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
+            <Input
+              label="Kommentar"
+              value={form.comment}
+              onChangeText={(comment) => onChange({ ...form, comment })}
+              placeholder="Eks: Ønsker jevn motstand"
+              multiline
+            />
+
+            {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
+
+            <Pressable
+              style={[styles.primaryButtonFull, isSaving && styles.disabledButton]}
+              disabled={isSaving}
+              onPress={onSubmit}
+            >
+              <Text style={styles.primaryButtonText}>{isSaving ? "Lagrer..." : "Lagre endringer"}</Text>
             </Pressable>
           </ScrollView>
         </KeyboardAvoidingView>
