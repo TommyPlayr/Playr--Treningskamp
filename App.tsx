@@ -634,7 +634,7 @@ export default function App() {
 
     const cleanForm = {
       sport: form.sport,
-      title: form.title.trim(),
+      title: `${form.ageGroup.trim() || currentProfile.ageGroup} søker treningskamp`,
       ageGroup: form.ageGroup.trim(),
       level: form.level.trim(),
       date: form.date.trim(),
@@ -646,14 +646,13 @@ export default function App() {
     };
 
     if (
-      !cleanForm.title ||
       !cleanForm.ageGroup ||
       !cleanForm.level ||
       !cleanForm.date ||
       !cleanForm.time ||
       !cleanForm.place
     ) {
-      setCreateFeedback("Fyll inn tittel, alder, nivå, dato, tid og bane/sted før du publiserer kampen.");
+      setCreateFeedback("Fyll inn alder, nivå, dato, tid og bane/sted før du publiserer kampen.");
       return;
     }
 
@@ -749,7 +748,7 @@ export default function App() {
 
     const cleanForm = {
       sport: editForm.sport,
-      title: editForm.title.trim(),
+      title: `${editForm.ageGroup.trim() || editingMatch.ageGroup} søker treningskamp`,
       ageGroup: editForm.ageGroup.trim(),
       level: editForm.level.trim(),
       date: editForm.date.trim(),
@@ -761,14 +760,13 @@ export default function App() {
     };
 
     if (
-      !cleanForm.title ||
       !cleanForm.ageGroup ||
       !cleanForm.level ||
       !cleanForm.date ||
       !cleanForm.time ||
       !cleanForm.place
     ) {
-      setEditFeedback("Fyll inn tittel, alder, nivå, dato, tid og bane/sted før du lagrer.");
+      setEditFeedback("Fyll inn alder, nivå, dato, tid og bane/sted før du lagrer.");
       return;
     }
 
@@ -2437,7 +2435,6 @@ function CreateMatchModal({
               </Picker>
             </View>
 
-            <Input label="Tittel" value={form.title} onChangeText={(title) => onChange({ ...form, title })} placeholder="Eks: FC Oslo G13 søker kamp" />
             <Input label="Alder" value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} placeholder="Eks: G13/J13" />
             <Input label="Nivå" value={form.level} onChangeText={(level) => onChange({ ...form, level })} placeholder="Eks: Nivå 1, 2 eller 3" />
             <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026" />
@@ -2506,7 +2503,6 @@ function EditMatchModal({
           </View>
 
           <ScrollView contentContainerStyle={styles.form}>
-            <Input label="Tittel" value={form.title} onChangeText={(title) => onChange({ ...form, title })} placeholder="Eks: FC Oslo G13 søker kamp" />
             <Text style={styles.inputLabel}>Idrett</Text>
             <View style={styles.pickerField}>
               <Picker
