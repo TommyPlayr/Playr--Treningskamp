@@ -2750,8 +2750,8 @@ function BottomTabs({
   const tabs: Array<{ key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
     { key: "home", label: "Hjem", icon: "home-outline" },
     { key: "matches", label: "Kamper", icon: "paper-plane-outline" },
-    { key: "inbox", label: "Innboks", icon: "file-tray-outline" },
-    { key: "mine", label: "Mine", icon: "person-outline" }
+    { key: "inbox", label: "Mine kamper", icon: "file-tray-outline" },
+    { key: "mine", label: "Forespørsler", icon: "person-outline" }
   ];
 
   return (
@@ -2874,9 +2874,9 @@ function getTabTitle(tab: Tab) {
     return "Kamper";
   }
   if (tab === "inbox") {
-    return "Innboks";
+    return "Mine kamper";
   }
-  return "Mine";
+  return "Forespørsler";
 }
 
 function formatTeamName(club: string, team: string) {
