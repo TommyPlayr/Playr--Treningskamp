@@ -317,6 +317,40 @@ const saveSeenNotifications = (profileId: string, incoming: number, approved: nu
   );
 };
 
+const readSeenNotificationIds = (profileId: string) => {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return { incoming: [] as string[], approved: [] as string[] };
+  }
+
+  try {
+    const saved = window.localStorage.getItem(`playr-seen-notification-ids-${profileId}`);
+    if (!saved) {
+      return { incoming: [] as string[], approved: [] as string[] };
+    }
+
+    const parsed = JSON.parse(saved);
+    return {
+      incoming: Array.isArray(parsed.incoming) ? parsed.incoming.filter(Boolean) : [],
+      approved: Array.isArray(parsed.approved) ? parsed.approved.filter(Boolean) : []
+    };
+  } catch {
+    return { incoming: [] as string[], approved: [] as string[] };
+  }
+};
+
+const saveSeenNotificationIds = (profileId: string, incoming: string[], approved: string[]) => {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    `playr-seen-notification-ids-${profileId}`,
+    JSON.stringify({ incoming, approved })
+  );
+};
+
+const mergeUniqueIds = (current: string[], next: string[]) => Array.from(new Set([...current, ...next]));
+
 const createEmptyForm = (profile: TeamProfile) => ({
   sport: profile.sport,
   title: "",
@@ -371,8 +405,8 @@ export default function App() {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
-  const [seenIncomingCount, setSeenIncomingCount] = useState(0);
-  const [seenApprovedCount, setSeenApprovedCount] = useState(0);
+  const [seenIncomingIds, setSeenIncomingIds] = useState<string[]>([]);
+  const [seenApprovedIds, setSeenApprovedIds] = useState<string[]>([]);
 
   const selectedMatch = matches.find((match) => match.id === selectedMatchId) ?? null;
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
@@ -393,48 +427,58 @@ export default function App() {
     return requests.filter((request) => hostedIds.has(request.matchId));
   }, [myHostedMatches, requests]);
 
-  const pendingIncomingCount = useMemo(
-    () => incomingRequests.filter((request) => request.status === "venter").length,
+  const pendingIncomingRequests = useMemo(
+    () => incomingRequests.filter((request) => request.status === "venter"),
     [incomingRequests]
   );
 
-  const approvedMyRequestsCount = useMemo(
-    () => myRequests.filter((request) => request.status === "godkjent").length,
+  const approvedMyRequests = useMemo(
+    () => myRequests.filter((request) => request.status === "godkjent"),
     [myRequests]
   );
 
-  const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
-  const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
+  const pendingIncomingIds = useMemo(
+    () => pendingIncomingRequests.map((request) => request.id),
+    [pendingIncomingRequests]
+  );
+
+  const approvedMyRequestIds = useMemo(
+    () => approvedMyRequests.map((request) => request.id),
+    [approvedMyRequests]
+  );
+
+  const visibleIncomingNotificationCount = pendingIncomingRequests.filter(
+    (request) => !seenIncomingIds.includes(request.id)
+  ).length;
+
+  const visibleApprovedNotificationCount = approvedMyRequests.filter(
+    (request) => !seenApprovedIds.includes(request.id)
+  ).length;
 
   useEffect(() => {
-    if (activeTab === "inbox") {
-      setSeenIncomingCount(pendingIncomingCount);
-    }
-
     if (activeTab === "mine") {
-      setSeenApprovedCount(approvedMyRequestsCount);
+      setSeenIncomingIds((current) => mergeUniqueIds(current, pendingIncomingIds));
     }
-  }, [activeTab, pendingIncomingCount, approvedMyRequestsCount]);
+
+    if (activeTab === "inbox") {
+      setSeenApprovedIds((current) => mergeUniqueIds(current, approvedMyRequestIds));
+    }
+  }, [activeTab, pendingIncomingIds, approvedMyRequestIds]);
 
   useEffect(() => {
-    if (seenIncomingCount > pendingIncomingCount) {
-      setSeenIncomingCount(pendingIncomingCount);
-    }
-
-    if (seenApprovedCount > approvedMyRequestsCount) {
-      setSeenApprovedCount(approvedMyRequestsCount);
-    }
-  }, [pendingIncomingCount, approvedMyRequestsCount, seenIncomingCount, seenApprovedCount]);
+    setSeenIncomingIds((current) => current.filter((id) => pendingIncomingIds.includes(id)));
+    setSeenApprovedIds((current) => current.filter((id) => approvedMyRequestIds.includes(id)));
+  }, [pendingIncomingIds, approvedMyRequestIds]);
 
   useEffect(() => {
-    const saved = readSeenNotifications(currentProfile.id);
-    setSeenIncomingCount(saved.incoming);
-    setSeenApprovedCount(saved.approved);
+    const saved = readSeenNotificationIds(currentProfile.id);
+    setSeenIncomingIds(saved.incoming);
+    setSeenApprovedIds(saved.approved);
   }, [currentProfile.id]);
 
   useEffect(() => {
-    saveSeenNotifications(currentProfile.id, seenIncomingCount, seenApprovedCount);
-  }, [currentProfile.id, seenIncomingCount, seenApprovedCount]);
+    saveSeenNotificationIds(currentProfile.id, seenIncomingIds, seenApprovedIds);
+  }, [currentProfile.id, seenIncomingIds, seenApprovedIds]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -454,8 +498,8 @@ export default function App() {
       setHasTeamProfile(false);
       setAppDataReady(!session?.user);
       setAuthReady(true);
-      setSeenIncomingCount(0);
-      setSeenApprovedCount(0);
+      setSeenIncomingIds([]);
+      setSeenApprovedIds([]);
     });
 
     return () => data.subscription.unsubscribe();
@@ -1288,12 +1332,12 @@ export default function App() {
           pendingIncomingCount={visibleIncomingNotificationCount}
           approvedMyRequestsCount={visibleApprovedNotificationCount}
           onOpenInbox={() => {
-            setSeenIncomingCount(pendingIncomingCount);
-            setActiveTab("inbox");
+            setSeenIncomingIds((current) => mergeUniqueIds(current, pendingIncomingIds));
+            setActiveTab("mine");
           }}
           onOpenMine={() => {
-            setSeenApprovedCount(approvedMyRequestsCount);
-            setActiveTab("mine");
+            setSeenApprovedIds((current) => mergeUniqueIds(current, approvedMyRequestIds));
+            setActiveTab("inbox");
           }}
         />
       );
@@ -1339,8 +1383,8 @@ export default function App() {
           setHasTeamProfile(false);
           setCurrentProfile(fallbackProfile);
           setProfileEditVisible(false);
-          setSeenIncomingCount(0);
-          setSeenApprovedCount(0);
+          setSeenIncomingIds([]);
+          setSeenApprovedIds([]);
         }}
         onOpenMatch={(id) => setSelectedMatchId(id)}
         onOpenRequest={(id) => setSelectedRequestId(id)}
