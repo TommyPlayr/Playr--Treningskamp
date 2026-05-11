@@ -1276,10 +1276,11 @@ export default function App() {
 
     if (activeTab === "inbox") {
       return (
-        <InboxScreen
-          requests={incomingRequests}
+        <AgreedMatchesScreen
+          profile={currentProfile}
           matches={matches}
-          onOpenRequest={(id) => setSelectedRequestId(id)}
+          requests={requests}
+          onOpenMatch={(id) => setSelectedMatchId(id)}
         />
       );
     }
@@ -1290,6 +1291,7 @@ export default function App() {
         hostedMatches={myHostedMatches}
         myRequests={myRequests}
         requests={requests}
+        incomingRequests={incomingRequests}
         matches={matches}
         userEmail={userEmail}
         onEditProfile={() => setProfileEditVisible(true)}
@@ -2153,10 +2155,59 @@ function InboxScreen({
   );
 }
 
+function AgreedMatchesScreen({
+  profile,
+  matches,
+  requests,
+  onOpenMatch
+}: {
+  profile: TeamProfile;
+  matches: Match[];
+  requests: MatchRequest[];
+  onOpenMatch: (id: string) => void;
+}) {
+  const agreedMatches = matches.filter((match) => {
+    if (match.status !== "avtalt") {
+      return false;
+    }
+
+    if (match.hostTeamId === profile.id) {
+      return true;
+    }
+
+    const approvedRequest = requests.find((request) => request.id === match.approvedRequestId);
+    return approvedRequest?.fromTeamId === profile.id && approvedRequest.status === "godkjent";
+  });
+
+  return (
+    <ScrollView contentContainerStyle={styles.list}>
+      <View style={styles.mineSectionHeader}>
+        <Text style={styles.sectionTitle}>Mine kamper</Text>
+        <Text style={styles.mineSectionCount}>{agreedMatches.length}</Text>
+      </View>
+
+      {agreedMatches.length === 0 ? (
+        <EmptyState text="Du har ingen avtalte kamper enda." />
+      ) : null}
+
+      {agreedMatches.map((match) => (
+        <MatchCard
+          key={match.id}
+          match={match}
+          hasMyRequest={match.hostTeamId !== profile.id}
+          approvedRequest={requests.find((request) => request.id === match.approvedRequestId)}
+          onPress={() => onOpenMatch(match.id)}
+        />
+      ))}
+    </ScrollView>
+  );
+}
+
 function MineScreen({
   profile,
   hostedMatches,
   myRequests,
+  incomingRequests,
   requests,
   matches,
   userEmail,
@@ -2168,6 +2219,7 @@ function MineScreen({
   profile: TeamProfile;
   hostedMatches: Match[];
   myRequests: MatchRequest[];
+  incomingRequests: MatchRequest[];
   requests: MatchRequest[];
   matches: Match[];
   userEmail: string | null;
@@ -2176,17 +2228,14 @@ function MineScreen({
   onOpenMatch: (id: string) => void;
   onOpenRequest: (id: string) => void;
 }) {
-  const sortedMyRequests = [...myRequests].sort(
-    (a, b) => getRequestSortValue(a.status) - getRequestSortValue(b.status)
-  );
-  const approvedRequestMatches = myRequests
-    .filter((request) => request.status === "godkjent")
-    .map((request) => matches.find((match) => match.id === request.matchId))
-    .filter((match): match is Match => Boolean(match))
-    .filter((match) => !hostedMatches.some((hostedMatch) => hostedMatch.id === match.id));
-  const myMatches = [...hostedMatches, ...approvedRequestMatches];
-  const agreedMyMatches = myMatches.filter((match) => match.status === "avtalt").length;
-  const pendingRequests = myRequests.filter((request) => request.status === "venter").length;
+  const openHostedMatches = hostedMatches.filter((match) => match.status !== "avtalt");
+  const incomingOpenRequests = incomingRequests.filter((request) => request.status !== "godkjent");
+  const sentOpenRequests = [...myRequests]
+    .filter((request) => request.status !== "godkjent")
+    .sort((a, b) => getRequestSortValue(a.status) - getRequestSortValue(b.status));
+
+  const totalOpenItems = openHostedMatches.length + incomingOpenRequests.length + sentOpenRequests.length;
+  const pendingIncoming = incomingOpenRequests.filter((request) => request.status === "venter").length;
 
   return (
     <ScrollView contentContainerStyle={styles.list}>
@@ -2209,25 +2258,25 @@ function MineScreen({
 
       <View style={styles.mineStats}>
         <View style={styles.mineStatItem}>
-          <Text style={styles.mineStatNumber}>{myMatches.length}</Text>
-          <Text style={styles.mineStatLabel}>Mine</Text>
+          <Text style={styles.mineStatNumber}>{totalOpenItems}</Text>
+          <Text style={styles.mineStatLabel}>Aktive</Text>
         </View>
         <View style={styles.mineStatItem}>
-          <Text style={styles.mineStatNumber}>{agreedMyMatches}</Text>
-          <Text style={styles.mineStatLabel}>Avtalt</Text>
+          <Text style={styles.mineStatNumber}>{pendingIncoming}</Text>
+          <Text style={styles.mineStatLabel}>Nye</Text>
         </View>
         <View style={styles.mineStatItem}>
-          <Text style={styles.mineStatNumber}>{pendingRequests}</Text>
-          <Text style={styles.mineStatLabel}>Venter</Text>
+          <Text style={styles.mineStatNumber}>{sentOpenRequests.length}</Text>
+          <Text style={styles.mineStatLabel}>Sendt</Text>
         </View>
       </View>
 
       <View style={styles.mineSectionHeader}>
         <Text style={styles.sectionTitle}>Kamper jeg har lagt ut</Text>
-        <Text style={styles.mineSectionCount}>{hostedMatches.length}</Text>
+        <Text style={styles.mineSectionCount}>{openHostedMatches.length}</Text>
       </View>
-      {hostedMatches.length === 0 ? <EmptyState text="Du har ikke lagt ut kamper enda." /> : null}
-      {hostedMatches.map((match) => (
+      {openHostedMatches.length === 0 ? <EmptyState text="Du har ingen åpne kamper ute." /> : null}
+      {openHostedMatches.map((match) => (
         <MatchCard
           key={match.id}
           match={match}
@@ -2238,28 +2287,35 @@ function MineScreen({
       ))}
 
       <View style={styles.mineSectionHeader}>
-        <Text style={styles.sectionTitle}>Avtalte kamper som motstander</Text>
-        <Text style={styles.mineSectionCount}>{approvedRequestMatches.length}</Text>
+        <Text style={styles.sectionTitle}>Forespørsler på mine kamper</Text>
+        <Text style={styles.mineSectionCount}>{incomingOpenRequests.length}</Text>
       </View>
-      {approvedRequestMatches.length === 0 ? <EmptyState text="Ingen avtalte bortekamper enda." /> : null}
-      {approvedRequestMatches.map((match) => (
-        <MatchCard
-          key={match.id}
-          match={match}
-          hasMyRequest
-          approvedRequest={myRequests.find(
-            (request) => request.matchId === match.id && request.status === "godkjent"
-          )}
-          onPress={() => onOpenMatch(match.id)}
-        />
-      ))}
+      {incomingOpenRequests.length === 0 ? <EmptyState text="Ingen nye forespørsler på dine kamper." /> : null}
+      {incomingOpenRequests.map((request) => {
+        const match = matches.find((candidate) => candidate.id === request.matchId);
+        if (!match) {
+          return null;
+        }
+
+        return (
+          <Pressable key={request.id} style={styles.requestCard} onPress={() => onOpenRequest(request.id)}>
+            <View style={styles.requestInfo}>
+              <Text style={styles.cardTitle}>{match.title}</Text>
+              <Text style={styles.cardMeta}>
+                {formatTeamName(request.fromClub, request.fromTeam)} · {match.date}
+              </Text>
+            </View>
+            <RequestBadge status={request.status} />
+          </Pressable>
+        );
+      })}
 
       <View style={styles.mineSectionHeader}>
         <Text style={styles.sectionTitle}>Mine forespørsler</Text>
-        <Text style={styles.mineSectionCount}>{myRequests.length}</Text>
+        <Text style={styles.mineSectionCount}>{sentOpenRequests.length}</Text>
       </View>
-      {myRequests.length === 0 ? <EmptyState text="Du har ikke sendt forespørsler enda." /> : null}
-      {sortedMyRequests.map((request) => {
+      {sentOpenRequests.length === 0 ? <EmptyState text="Du har ingen aktive forespørsler." /> : null}
+      {sentOpenRequests.map((request) => {
         const match = matches.find((candidate) => candidate.id === request.matchId);
         if (!match) {
           return null;
@@ -2706,8 +2762,8 @@ function BottomTabs({
   const tabs: Array<{ key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
     { key: "home", label: "Hjem", icon: "home-outline" },
     { key: "matches", label: "Kamper", icon: "paper-plane-outline" },
-    { key: "inbox", label: "Innboks", icon: "file-tray-outline" },
-    { key: "mine", label: "Mine", icon: "person-outline" }
+    { key: "inbox", label: "Mine kamper", icon: "calendar-outline" },
+    { key: "mine", label: "Forespørsler", icon: "file-tray-outline" }
   ];
 
   return (
@@ -2821,9 +2877,9 @@ function getTabTitle(tab: Tab) {
     return "Kamper";
   }
   if (tab === "inbox") {
-    return "Innboks";
+    return "Mine kamper";
   }
-  return "Mine";
+  return "Forespørsler";
 }
 
 function formatTeamName(club: string, team: string) {
