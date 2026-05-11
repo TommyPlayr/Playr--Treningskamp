@@ -1,4 +1,4 @@
-﻿import { StatusBar } from "expo-status-bar";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -286,6 +286,38 @@ const initialRequests: MatchRequest[] = [
 const initialMessages: ChatMessage[] = [
 ];
 
+const readSeenNotificationCounts = (profileId: string) => {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return null;
+  }
+
+  try {
+    const saved = window.localStorage.getItem(`playr-seen-notification-counts-${profileId}`);
+    if (!saved) {
+      return null;
+    }
+
+    const parsed = JSON.parse(saved);
+    return {
+      incoming: Number(parsed.incoming) || 0,
+      approved: Number(parsed.approved) || 0
+    };
+  } catch {
+    return null;
+  }
+};
+
+const saveSeenNotificationCounts = (profileId: string, incoming: number, approved: number) => {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+
+  window.localStorage.setItem(
+    `playr-seen-notification-counts-${profileId}`,
+    JSON.stringify({ incoming, approved })
+  );
+};
+
 const createEmptyForm = (profile: TeamProfile) => ({
   sport: profile.sport,
   title: "",
@@ -377,11 +409,11 @@ export default function App() {
   const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
 
   useEffect(() => {
-    if (activeTab === "inbox") {
+    if (activeTab === "mine") {
       setSeenIncomingCount(pendingIncomingCount);
     }
 
-    if (activeTab === "mine") {
+    if (activeTab === "inbox") {
       setSeenApprovedCount(approvedMyRequestsCount);
     }
   }, [activeTab, pendingIncomingCount, approvedMyRequestsCount]);
@@ -397,9 +429,21 @@ export default function App() {
   }, [pendingIncomingCount, approvedMyRequestsCount, seenIncomingCount, seenApprovedCount]);
 
   useEffect(() => {
-    setSeenIncomingCount(0);
-    setSeenApprovedCount(0);
-  }, [currentProfile.id]);
+    const saved = readSeenNotificationCounts(currentProfile.id);
+
+    if (saved) {
+      setSeenIncomingCount(saved.incoming);
+      setSeenApprovedCount(saved.approved);
+      return;
+    }
+
+    setSeenIncomingCount(pendingIncomingCount);
+    setSeenApprovedCount(approvedMyRequestsCount);
+  }, [currentProfile.id, pendingIncomingCount, approvedMyRequestsCount]);
+
+  useEffect(() => {
+    saveSeenNotificationCounts(currentProfile.id, seenIncomingCount, seenApprovedCount);
+  }, [currentProfile.id, seenIncomingCount, seenApprovedCount]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -1250,11 +1294,11 @@ export default function App() {
           approvedMyRequestsCount={visibleApprovedNotificationCount}
           onOpenInbox={() => {
             setSeenIncomingCount(pendingIncomingCount);
-            setActiveTab("inbox");
+            setActiveTab("mine");
           }}
           onOpenMine={() => {
             setSeenApprovedCount(approvedMyRequestsCount);
-            setActiveTab("mine");
+            setActiveTab("inbox");
           }}
         />
       );
