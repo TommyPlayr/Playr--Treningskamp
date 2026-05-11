@@ -634,6 +634,63 @@ export default function App() {
     }
   };
 
+  const deleteHostedMatch = async (match: Match) => {
+    const confirmed =
+      typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm("Slette kamp? Kampen fjernes helt fra appen.")
+        : true;
+
+    if (!confirmed) {
+      return;
+    }
+
+    const previousMatches = matches;
+    const previousRequests = requests;
+    const previousMessages = messages;
+    const requestIds = new Set(
+      requests.filter((request) => request.matchId === match.id).map((request) => request.id)
+    );
+
+    setSelectedMatchId(null);
+    setMatches((current) => current.filter((item) => item.id !== match.id));
+    setRequests((current) => current.filter((request) => request.matchId !== match.id));
+    setMessages((current) => current.filter((message) => !requestIds.has(message.requestId)));
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase
+        .from("matches")
+        .update({ status: "ledig", approved_request_id: null })
+        .eq("id", match.id)
+        .eq("host_team_id", currentProfile.id);
+
+      const { error } = await supabase
+        .from("matches")
+        .delete()
+        .eq("id", match.id)
+        .eq("host_team_id", currentProfile.id);
+
+      if (error) {
+        setMatches(previousMatches);
+        setRequests(previousRequests);
+        setMessages(previousMessages);
+
+        if (typeof window !== "undefined" && typeof window.alert === "function") {
+          window.alert(`Kampen ble ikke slettet: ${getReadableErrorMessage(error)}`);
+        } else {
+          Alert.alert("Kampen ble ikke slettet", getReadableErrorMessage(error));
+        }
+      }
+    }
+  };
+
+  const showEditComingSoon = () => {
+    if (typeof window !== "undefined" && typeof window.alert === "function") {
+      window.alert("Redigering kobles på i neste steg.");
+    } else {
+      Alert.alert("Rediger kamp", "Redigering kobles på i neste steg.");
+    }
+  };
+
   const sendRequest = async (match: Match) => {
     if (isSendingRequest) {
       return;
@@ -1205,6 +1262,8 @@ export default function App() {
         isSendingRequest={isSendingRequest}
         onClose={() => setSelectedMatchId(null)}
         onSendRequest={sendRequest}
+        onEditMatch={showEditComingSoon}
+        onDeleteMatch={deleteHostedMatch}
       />
 
       <RequestDetailsModal
@@ -2193,7 +2252,9 @@ function MatchDetailsModal({
   requests,
   isSendingRequest,
   onClose,
-  onSendRequest
+  onSendRequest,
+  onEditMatch,
+  onDeleteMatch
 }: {
   match: Match | null;
   profile: TeamProfile;
@@ -2201,6 +2262,8 @@ function MatchDetailsModal({
   isSendingRequest: boolean;
   onClose: () => void;
   onSendRequest: (match: Match) => void;
+  onEditMatch: () => void;
+  onDeleteMatch: (match: Match) => void;
 }) {
   if (!match) {
     return null;
@@ -2265,57 +2328,14 @@ function MatchDetailsModal({
 
               <Pressable
                 style={styles.primaryButtonFull}
-                onPress={() => Alert.alert("Rediger kamp", "Redigering kobles på i neste steg.")}
+                onPress={onEditMatch}
               >
                 <Text style={styles.primaryButtonText}>Rediger kamp</Text>
               </Pressable>
 
               <Pressable
                 style={styles.dangerButton}
-                onPress={() => {
-                  Alert.alert(
-                    "Slette kamp?",
-                    "Kampen fjernes helt fra appen.",
-                    [
-                      { text: "Avbryt", style: "cancel" },
-                      {
-                        text: "Slett kamp",
-                        style: "destructive",
-                        onPress: async () => {
-                          setSelectedMatchId(null);
-                          setMatches((current) => current.filter((item) => item.id !== match.id));
-                          setRequests((current) => current.filter((request) => request.matchId !== match.id));
-                          setMessages((current) =>
-                            current.filter(
-                              (message) =>
-                                !requests.some(
-                                  (request) => request.matchId === match.id && request.id === message.requestId
-                                )
-                            )
-                          );
-
-                          if (isSupabaseConfigured && supabase) {
-                            await supabase
-                              .from("matches")
-                              .update({ status: "ledig", approved_request_id: null })
-                              .eq("id", match.id)
-                              .eq("host_team_id", profile.id);
-
-                            const { error } = await supabase
-                              .from("matches")
-                              .delete()
-                              .eq("id", match.id)
-                              .eq("host_team_id", profile.id);
-
-                            if (error) {
-                              Alert.alert("Kampen ble ikke slettet", getReadableErrorMessage(error));
-                            }
-                          }
-                        }
-                      }
-                    ]
-                  );
-                }}
+                onPress={() => onDeleteMatch(match)}
               >
                 <Text style={styles.dangerButtonText}>Slett kamp</Text>
               </Pressable>
