@@ -1447,7 +1447,7 @@ export default function App() {
         <BottomTabs
           activeTab={activeTab}
           onChange={setActiveTab}
-          badges={{ inbox: visibleIncomingNotificationCount, mine: visibleApprovedNotificationCount }}
+          badges={{ inbox: visibleApprovedNotificationCount, mine: visibleIncomingNotificationCount }}
         />
       </View>
 
@@ -2006,8 +2006,8 @@ function HomeScreen({
               <Ionicons name="notifications-outline" size={18} color={colors.green} />
               <Text style={styles.notificationText}>
                 {pendingIncomingCount === 1
-                  ? "Du har 1 ny forespørsel i innboksen."
-                  : `Du har ${pendingIncomingCount} nye forespørsler i innboksen.`}
+                  ? "Du har 1 ny forespørsel."
+                  : `Du har ${pendingIncomingCount} nye forespørsler.`}
               </Text>
             </Pressable>
           ) : null}
