@@ -851,6 +851,18 @@ export default function App() {
       return;
     }
 
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      const confirmed = window.confirm(
+        "Slette kamp?\n\nKampen fjernes helt, sammen med forespørsler og chat som hører til denne kampen."
+      );
+
+      if (confirmed) {
+        deleteMatchNow(match);
+      }
+
+      return;
+    }
+
     Alert.alert(
       "Slette kamp?",
       "Kampen fjernes helt, sammen med forespørsler og chat som hører til denne kampen.",
