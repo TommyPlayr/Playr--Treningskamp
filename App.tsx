@@ -369,6 +369,7 @@ export default function App() {
   const [isPublishingMatch, setIsPublishingMatch] = useState(false);
   const [isUpdatingMatch, setIsUpdatingMatch] = useState(false);
   const [isDeletingMatch, setIsDeletingMatch] = useState(false);
+  const [isCancelingMatch, setIsCancelingMatch] = useState(false);
   const [editForm, setEditForm] = useState(createEmptyForm(fallbackProfile));
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -1112,6 +1113,68 @@ export default function App() {
     }
   };
 
+  const cancelAgreedMatch = async (match: Match) => {
+    if (isCancelingMatch || match.status !== "avtalt") {
+      return;
+    }
+
+    const approvedRequest = requests.find(
+      (request) =>
+        request.id === match.approvedRequestId ||
+        (request.matchId === match.id && request.status === "godkjent")
+    );
+
+    const canCancel = match.hostTeamId === currentProfile.id || approvedRequest?.fromTeamId === currentProfile.id;
+
+    if (!approvedRequest || !canCancel) {
+      Alert.alert("Kan ikke avlyse", "Du kan bare avlyse kamper du selv er involvert i.");
+      return;
+    }
+
+    const previousMatches = matches;
+    const previousRequests = requests;
+
+    setIsCancelingMatch(true);
+    setMatches((current) =>
+      current.map((item) =>
+        item.id === match.id ? { ...item, status: "ledig", approvedRequestId: undefined } : item
+      )
+    );
+    setRequests((current) =>
+      current.map((item) => (item.id === approvedRequest.id ? { ...item, status: "avslatt" } : item))
+    );
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error: requestError } = await supabase
+          .from("match_requests")
+          .update({ status: "avslatt" })
+          .eq("id", approvedRequest.id);
+
+        if (requestError) {
+          throw requestError;
+        }
+
+        const { error: matchError } = await supabase
+          .from("matches")
+          .update({ status: "ledig", approved_request_id: null })
+          .eq("id", match.id);
+
+        if (matchError) {
+          throw matchError;
+        }
+      }
+
+      setSelectedMatchId(null);
+    } catch (error) {
+      setMatches(previousMatches);
+      setRequests(previousRequests);
+      Alert.alert("Kampen ble ikke avlyst", getReadableErrorMessage(error));
+    } finally {
+      setIsCancelingMatch(false);
+    }
+  };
+
   const saveProfileChanges = async (profile: TeamProfile) => {
     if (!isSupabaseConfigured || !supabase || !authUserId) {
       setCurrentProfile(profile);
@@ -1481,10 +1544,12 @@ export default function App() {
         requests={requests}
         isSendingRequest={isSendingRequest}
         isDeletingMatch={isDeletingMatch}
+        isCancelingMatch={isCancelingMatch}
         onClose={() => setSelectedMatchId(null)}
         onSendRequest={sendRequest}
         onEditMatch={openEditMatch}
         onDeleteMatch={deleteMatch}
+        onCancelAgreedMatch={cancelAgreedMatch}
       />
 
       <RequestDetailsModal
@@ -2547,20 +2612,24 @@ function MatchDetailsModal({
   requests,
   isSendingRequest,
   isDeletingMatch,
+  isCancelingMatch,
   onClose,
   onSendRequest,
   onEditMatch,
-  onDeleteMatch
+  onDeleteMatch,
+  onCancelAgreedMatch
 }: {
   match: Match | null;
   profile: TeamProfile;
   requests: MatchRequest[];
   isSendingRequest: boolean;
   isDeletingMatch: boolean;
+  isCancelingMatch: boolean;
   onClose: () => void;
   onSendRequest: (match: Match) => void;
   onEditMatch: (match: Match) => void;
   onDeleteMatch: (match: Match) => void;
+  onCancelAgreedMatch: (match: Match) => void;
 }) {
   if (!match) {
     return null;
@@ -2607,22 +2676,34 @@ function MatchDetailsModal({
           <Text style={styles.paragraph}>{match.comment || "Ingen kommentar."}</Text>
 
           {!isOwnMatch ? (
-            <Pressable
-              style={[
-                styles.primaryButtonFull,
-                requestButtonDisabled && styles.disabledButton
-              ]}
-              disabled={requestButtonDisabled}
-              onPress={() => onSendRequest(match)}
-            >
-              <Text style={styles.primaryButtonText}>
-                {isSendingRequest
-                  ? "Sender..."
-                  : myRequest && myRequest.status !== "avslatt"
-                    ? "Forespørsel sendt"
-                    : "Send forespørsel"}
-              </Text>
-            </Pressable>
+            match.status === "avtalt" && myRequest?.status === "godkjent" ? (
+              <Pressable
+                style={[styles.dangerButton, isCancelingMatch && styles.disabledButton]}
+                disabled={isCancelingMatch}
+                onPress={() => onCancelAgreedMatch(match)}
+              >
+                <Text style={styles.dangerButtonText}>
+                  {isCancelingMatch ? "Avlyser..." : "Avlys kamp"}
+                </Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[
+                  styles.primaryButtonFull,
+                  requestButtonDisabled && styles.disabledButton
+                ]}
+                disabled={requestButtonDisabled}
+                onPress={() => onSendRequest(match)}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {isSendingRequest
+                    ? "Sender..."
+                    : myRequest && myRequest.status !== "avslatt"
+                      ? "Forespørsel sendt"
+                      : "Send forespørsel"}
+                </Text>
+              </Pressable>
+            )
           ) : (
             <View style={styles.actionStack}>
               <Text style={styles.requestHint}>Dette er en kamp du har lagt ut.</Text>
@@ -2630,6 +2711,17 @@ function MatchDetailsModal({
                 <Ionicons name="create-outline" size={18} color={colors.greenDark} />
                 <Text style={styles.secondaryButtonText}>Rediger kamp</Text>
               </Pressable>
+              {match.status === "avtalt" ? (
+                <Pressable
+                  style={[styles.dangerButton, isCancelingMatch && styles.disabledButton]}
+                  disabled={isCancelingMatch}
+                  onPress={() => onCancelAgreedMatch(match)}
+                >
+                  <Text style={styles.dangerButtonText}>
+                    {isCancelingMatch ? "Avlyser..." : "Avlys kamp"}
+                  </Text>
+                </Pressable>
+              ) : null}
               <Pressable
                 style={[styles.dangerButton, isDeletingMatch && styles.disabledButton]}
                 disabled={isDeletingMatch}
