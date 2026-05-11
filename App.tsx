@@ -1,10 +1,11 @@
-import { StatusBar } from "expo-status-bar";
+﻿import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   ActivityIndicator,
   FlatList,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   Pressable,
@@ -285,72 +286,6 @@ const initialRequests: MatchRequest[] = [
 const initialMessages: ChatMessage[] = [
 ];
 
-const readSeenNotifications = (profileId: string) => {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return { incoming: 0, approved: 0 };
-  }
-
-  try {
-    const saved = window.localStorage.getItem(`playr-seen-notifications-${profileId}`);
-    if (!saved) {
-      return { incoming: 0, approved: 0 };
-    }
-
-    const parsed = JSON.parse(saved);
-    return {
-      incoming: Number(parsed.incoming) || 0,
-      approved: Number(parsed.approved) || 0
-    };
-  } catch {
-    return { incoming: 0, approved: 0 };
-  }
-};
-
-const saveSeenNotifications = (profileId: string, incoming: number, approved: number) => {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return;
-  }
-
-  window.localStorage.setItem(
-    `playr-seen-notifications-${profileId}`,
-    JSON.stringify({ incoming, approved })
-  );
-};
-
-const readSeenNotificationIds = (profileId: string) => {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return { incoming: [] as string[], approved: [] as string[] };
-  }
-
-  try {
-    const saved = window.localStorage.getItem(`playr-seen-notification-ids-${profileId}`);
-    if (!saved) {
-      return { incoming: [] as string[], approved: [] as string[] };
-    }
-
-    const parsed = JSON.parse(saved);
-    return {
-      incoming: Array.isArray(parsed.incoming) ? parsed.incoming.filter(Boolean) : [],
-      approved: Array.isArray(parsed.approved) ? parsed.approved.filter(Boolean) : []
-    };
-  } catch {
-    return { incoming: [] as string[], approved: [] as string[] };
-  }
-};
-
-const saveSeenNotificationIds = (profileId: string, incoming: string[], approved: string[]) => {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return;
-  }
-
-  window.localStorage.setItem(
-    `playr-seen-notification-ids-${profileId}`,
-    JSON.stringify({ incoming, approved })
-  );
-};
-
-const mergeUniqueIds = (current: string[], next: string[]) => Array.from(new Set([...current, ...next]));
-
 const createEmptyForm = (profile: TeamProfile) => ({
   sport: profile.sport,
   title: "",
@@ -401,12 +336,13 @@ export default function App() {
   const [editFeedback, setEditFeedback] = useState<string | null>(null);
   const [isPublishingMatch, setIsPublishingMatch] = useState(false);
   const [isUpdatingMatch, setIsUpdatingMatch] = useState(false);
+  const [isDeletingMatch, setIsDeletingMatch] = useState(false);
   const [editForm, setEditForm] = useState(createEmptyForm(fallbackProfile));
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
-  const [seenIncomingIds, setSeenIncomingIds] = useState<string[]>([]);
-  const [seenApprovedIds, setSeenApprovedIds] = useState<string[]>([]);
+  const [seenIncomingCount, setSeenIncomingCount] = useState(0);
+  const [seenApprovedCount, setSeenApprovedCount] = useState(0);
 
   const selectedMatch = matches.find((match) => match.id === selectedMatchId) ?? null;
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
@@ -427,61 +363,43 @@ export default function App() {
     return requests.filter((request) => hostedIds.has(request.matchId));
   }, [myHostedMatches, requests]);
 
-  const pendingIncomingRequests = useMemo(
-    () => incomingRequests.filter((request) => request.status === "venter"),
+  const pendingIncomingCount = useMemo(
+    () => incomingRequests.filter((request) => request.status === "venter").length,
     [incomingRequests]
   );
 
-  const approvedMyRequests = useMemo(
-    () => myRequests.filter((request) => request.status === "godkjent"),
+  const approvedMyRequestsCount = useMemo(
+    () => myRequests.filter((request) => request.status === "godkjent").length,
     [myRequests]
   );
 
-  const pendingIncomingIds = useMemo(
-    () => pendingIncomingRequests.map((request) => request.id),
-    [pendingIncomingRequests]
-  );
-
-  const approvedMyRequestIds = useMemo(
-    () => approvedMyRequests.map((request) => request.id),
-    [approvedMyRequests]
-  );
-
-  const visibleIncomingNotificationCount = pendingIncomingRequests.filter(
-    (request) => !seenIncomingIds.includes(request.id)
-  ).length;
-
-  const visibleApprovedNotificationCount = approvedMyRequests.filter(
-    (request) => !seenApprovedIds.includes(request.id)
-  ).length;
+  const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
+  const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
 
   useEffect(() => {
-    if (activeTab === "mine") {
-      setSeenIncomingIds((current) => mergeUniqueIds(current, pendingIncomingIds));
-    }
-
     if (activeTab === "inbox") {
-      setSeenApprovedIds((current) => mergeUniqueIds(current, approvedMyRequestIds));
+      setSeenIncomingCount(pendingIncomingCount);
     }
-  }, [activeTab, pendingIncomingIds, approvedMyRequestIds]);
+
+    if (activeTab === "mine") {
+      setSeenApprovedCount(approvedMyRequestsCount);
+    }
+  }, [activeTab, pendingIncomingCount, approvedMyRequestsCount]);
 
   useEffect(() => {
-    setSeenIncomingIds((current) => current.filter((id) => pendingIncomingIds.includes(id)));
-    setSeenApprovedIds((current) => current.filter((id) => approvedMyRequestIds.includes(id)));
-  }, [pendingIncomingIds, approvedMyRequestIds]);
+    if (seenIncomingCount > pendingIncomingCount) {
+      setSeenIncomingCount(pendingIncomingCount);
+    }
+
+    if (seenApprovedCount > approvedMyRequestsCount) {
+      setSeenApprovedCount(approvedMyRequestsCount);
+    }
+  }, [pendingIncomingCount, approvedMyRequestsCount, seenIncomingCount, seenApprovedCount]);
 
   useEffect(() => {
-    const saved = readSeenNotificationIds(currentProfile.id);
-    const hasSavedIncoming = saved.incoming.length > 0;
-    const hasSavedApproved = saved.approved.length > 0;
-
-    setSeenIncomingIds(hasSavedIncoming ? saved.incoming : pendingIncomingIds);
-    setSeenApprovedIds(hasSavedApproved ? saved.approved : approvedMyRequestIds);
-  }, [currentProfile.id, pendingIncomingIds, approvedMyRequestIds]);
-
-  useEffect(() => {
-    saveSeenNotificationIds(currentProfile.id, seenIncomingIds, seenApprovedIds);
-  }, [currentProfile.id, seenIncomingIds, seenApprovedIds]);
+    setSeenIncomingCount(0);
+    setSeenApprovedCount(0);
+  }, [currentProfile.id]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -501,8 +419,8 @@ export default function App() {
       setHasTeamProfile(false);
       setAppDataReady(!session?.user);
       setAuthReady(true);
-      setSeenIncomingIds([]);
-      setSeenApprovedIds([]);
+      setSeenIncomingCount(0);
+      setSeenApprovedCount(0);
     });
 
     return () => data.subscription.unsubscribe();
@@ -646,7 +564,7 @@ export default function App() {
       date: form.date.trim(),
       time: form.time.trim(),
       place: form.place.trim(),
-      city: form.city.trim(),
+      city: form.city.trim() || "Ikke satt",
       matchType: form.matchType.trim() || "Treningskamp",
       comment: form.comment.trim()
     };
@@ -657,10 +575,9 @@ export default function App() {
       !cleanForm.level ||
       !cleanForm.date ||
       !cleanForm.time ||
-      !cleanForm.place ||
-      !cleanForm.city
+      !cleanForm.place
     ) {
-      setCreateFeedback("Fyll inn tittel, alder, nivå, dato, tid, sted og by før du publiserer kampen.");
+      setCreateFeedback("Fyll inn tittel, alder, nivå, dato, tid og bane/sted før du publiserer kampen.");
       return;
     }
 
@@ -747,9 +664,7 @@ export default function App() {
     setEditMatchId(match.id);
   };
 
-  const updateHostedMatch = async () => {
-    const editingMatch = matches.find((match) => match.id === editMatchId) ?? null;
-
+  const updateMatch = async () => {
     if (!editingMatch || isUpdatingMatch) {
       return;
     }
@@ -764,7 +679,7 @@ export default function App() {
       date: editForm.date.trim(),
       time: editForm.time.trim(),
       place: editForm.place.trim(),
-      city: editForm.city.trim(),
+      city: editForm.city.trim() || "Ikke satt",
       matchType: editForm.matchType.trim() || "Treningskamp",
       comment: editForm.comment.trim()
     };
@@ -775,10 +690,9 @@ export default function App() {
       !cleanForm.level ||
       !cleanForm.date ||
       !cleanForm.time ||
-      !cleanForm.place ||
-      !cleanForm.city
+      !cleanForm.place
     ) {
-      setEditFeedback("Fyll inn tittel, alder, nivå, dato, tid, sted og by før du lagrer.");
+      setEditFeedback("Fyll inn tittel, alder, nivå, dato, tid og bane/sted før du lagrer.");
       return;
     }
 
@@ -858,60 +772,60 @@ export default function App() {
     }
   };
 
-  const deleteHostedMatch = async (match: Match) => {
-    const confirmed =
-      typeof window !== "undefined" && typeof window.confirm === "function"
-        ? window.confirm("Slette kamp? Kampen fjernes helt fra appen.")
-        : true;
-
-    if (!confirmed) {
+  const deleteMatch = (match: Match) => {
+    if (match.hostTeamId !== currentProfile.id || isDeletingMatch) {
       return;
     }
 
+    Alert.alert(
+      "Slette kamp?",
+      "Kampen fjernes helt, sammen med forespørsler og chat som hører til denne kampen.",
+      [
+        { text: "Avbryt", style: "cancel" },
+        {
+          text: "Slett kamp",
+          style: "destructive",
+          onPress: () => deleteMatchNow(match)
+        }
+      ]
+    );
+  };
+
+  const deleteMatchNow = async (match: Match) => {
     const previousMatches = matches;
     const previousRequests = requests;
     const previousMessages = messages;
-    const requestIds = new Set(
-      requests.filter((request) => request.matchId === match.id).map((request) => request.id)
-    );
+    const requestIds = new Set(requests.filter((request) => request.matchId === match.id).map((request) => request.id));
 
+    setIsDeletingMatch(true);
     setSelectedMatchId(null);
     setMatches((current) => current.filter((item) => item.id !== match.id));
     setRequests((current) => current.filter((request) => request.matchId !== match.id));
     setMessages((current) => current.filter((message) => !requestIds.has(message.requestId)));
 
-    if (isSupabaseConfigured && supabase) {
-      await supabase
-        .from("matches")
-        .update({ status: "ledig", approved_request_id: null })
-        .eq("id", match.id)
-        .eq("host_team_id", currentProfile.id);
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await supabase
+          .from("matches")
+          .update({ status: "ledig", approved_request_id: null })
+          .eq("id", match.id)
+          .eq("host_team_id", currentProfile.id);
 
-      const { error } = await supabase
-        .from("matches")
-        .delete()
-        .eq("id", match.id)
-        .eq("host_team_id", currentProfile.id);
+        const { error } = await supabase
+          .from("matches")
+          .delete()
+          .eq("id", match.id)
+          .eq("host_team_id", currentProfile.id);
 
-      if (error) {
-        setMatches(previousMatches);
-        setRequests(previousRequests);
-        setMessages(previousMessages);
-
-        if (typeof window !== "undefined" && typeof window.alert === "function") {
-          window.alert(`Kampen ble ikke slettet: ${getReadableErrorMessage(error)}`);
-        } else {
+        if (error) {
+          setMatches(previousMatches);
+          setRequests(previousRequests);
+          setMessages(previousMessages);
           Alert.alert("Kampen ble ikke slettet", getReadableErrorMessage(error));
         }
       }
-    }
-  };
-
-  const showEditComingSoon = () => {
-    if (typeof window !== "undefined" && typeof window.alert === "function") {
-      window.alert("Redigering kobles på i neste steg.");
-    } else {
-      Alert.alert("Rediger kamp", "Redigering kobles på i neste steg.");
+    } finally {
+      setIsDeletingMatch(false);
     }
   };
 
@@ -1335,12 +1249,12 @@ export default function App() {
           pendingIncomingCount={visibleIncomingNotificationCount}
           approvedMyRequestsCount={visibleApprovedNotificationCount}
           onOpenInbox={() => {
-            setSeenIncomingIds((current) => mergeUniqueIds(current, pendingIncomingIds));
-            setActiveTab("mine");
+            setSeenIncomingCount(pendingIncomingCount);
+            setActiveTab("inbox");
           }}
           onOpenMine={() => {
-            setSeenApprovedIds((current) => mergeUniqueIds(current, approvedMyRequestIds));
-            setActiveTab("inbox");
+            setSeenApprovedCount(approvedMyRequestsCount);
+            setActiveTab("mine");
           }}
         />
       );
@@ -1360,11 +1274,10 @@ export default function App() {
 
     if (activeTab === "inbox") {
       return (
-        <AgreedMatchesScreen
-          profile={currentProfile}
+        <InboxScreen
+          requests={incomingRequests}
           matches={matches}
-          requests={requests}
-          onOpenMatch={(id) => setSelectedMatchId(id)}
+          onOpenRequest={(id) => setSelectedRequestId(id)}
         />
       );
     }
@@ -1375,7 +1288,6 @@ export default function App() {
         hostedMatches={myHostedMatches}
         myRequests={myRequests}
         requests={requests}
-        incomingRequests={incomingRequests}
         matches={matches}
         userEmail={userEmail}
         onEditProfile={() => setProfileEditVisible(true)}
@@ -1386,8 +1298,8 @@ export default function App() {
           setHasTeamProfile(false);
           setCurrentProfile(fallbackProfile);
           setProfileEditVisible(false);
-          setSeenIncomingIds([]);
-          setSeenApprovedIds([]);
+          setSeenIncomingCount(0);
+          setSeenApprovedCount(0);
         }}
         onOpenMatch={(id) => setSelectedMatchId(id)}
         onOpenRequest={(id) => setSelectedRequestId(id)}
@@ -1481,7 +1393,7 @@ export default function App() {
         isSaving={isUpdatingMatch}
         onChange={setEditForm}
         onClose={() => setEditMatchId(null)}
-        onSubmit={updateHostedMatch}
+        onSubmit={updateMatch}
       />
 
       <ProfileEditModal
@@ -1496,10 +1408,11 @@ export default function App() {
         profile={currentProfile}
         requests={requests}
         isSendingRequest={isSendingRequest}
+        isDeletingMatch={isDeletingMatch}
         onClose={() => setSelectedMatchId(null)}
         onSendRequest={sendRequest}
         onEditMatch={openEditMatch}
-        onDeleteMatch={deleteHostedMatch}
+        onDeleteMatch={deleteMatch}
       />
 
       <RequestDetailsModal
@@ -2054,7 +1967,7 @@ function HomeScreen({
                 </View>
               </View>
               <Text style={styles.featuredMeta}>
-                {activeMatch.date} · {activeMatch.time} · {activeMatch.city}
+                {activeMatch.date} · {activeMatch.time} · {activeMatch.place}
               </Text>
               <Text style={styles.featuredText}>{activeMatch.title}</Text>
               <View style={styles.featuredFooter}>
@@ -2216,7 +2129,7 @@ function InboxScreen({
             {match ? (
               <View style={styles.inboxMetaGrid}>
                 <InfoLine icon="calendar-outline" text={`${match.date} ${match.time}`} />
-                <InfoLine icon="location-outline" text={`${match.place}, ${match.city}`} />
+                <InfoLine icon="location-outline" text={match.place} />
               </View>
             ) : null}
 
@@ -2239,59 +2152,10 @@ function InboxScreen({
   );
 }
 
-function AgreedMatchesScreen({
-  profile,
-  matches,
-  requests,
-  onOpenMatch
-}: {
-  profile: TeamProfile;
-  matches: Match[];
-  requests: MatchRequest[];
-  onOpenMatch: (id: string) => void;
-}) {
-  const agreedMatches = matches.filter((match) => {
-    if (match.status !== "avtalt") {
-      return false;
-    }
-
-    if (match.hostTeamId === profile.id) {
-      return true;
-    }
-
-    const approvedRequest = requests.find((request) => request.id === match.approvedRequestId);
-    return approvedRequest?.fromTeamId === profile.id && approvedRequest.status === "godkjent";
-  });
-
-  return (
-    <ScrollView contentContainerStyle={styles.list}>
-      <View style={styles.mineSectionHeader}>
-        <Text style={styles.sectionTitle}>Mine kamper</Text>
-        <Text style={styles.mineSectionCount}>{agreedMatches.length}</Text>
-      </View>
-
-      {agreedMatches.length === 0 ? (
-        <EmptyState text="Du har ingen avtalte kamper enda." />
-      ) : null}
-
-      {agreedMatches.map((match) => (
-        <MatchCard
-          key={match.id}
-          match={match}
-          hasMyRequest={match.hostTeamId !== profile.id}
-          approvedRequest={requests.find((request) => request.id === match.approvedRequestId)}
-          onPress={() => onOpenMatch(match.id)}
-        />
-      ))}
-    </ScrollView>
-  );
-}
-
 function MineScreen({
   profile,
   hostedMatches,
   myRequests,
-  incomingRequests,
   requests,
   matches,
   userEmail,
@@ -2303,7 +2167,6 @@ function MineScreen({
   profile: TeamProfile;
   hostedMatches: Match[];
   myRequests: MatchRequest[];
-  incomingRequests: MatchRequest[];
   requests: MatchRequest[];
   matches: Match[];
   userEmail: string | null;
@@ -2312,14 +2175,17 @@ function MineScreen({
   onOpenMatch: (id: string) => void;
   onOpenRequest: (id: string) => void;
 }) {
-  const openHostedMatches = hostedMatches.filter((match) => match.status !== "avtalt");
-  const incomingOpenRequests = incomingRequests.filter((request) => request.status !== "godkjent");
-  const sentOpenRequests = [...myRequests]
-    .filter((request) => request.status !== "godkjent")
-    .sort((a, b) => getRequestSortValue(a.status) - getRequestSortValue(b.status));
-
-  const totalOpenItems = openHostedMatches.length + incomingOpenRequests.length + sentOpenRequests.length;
-  const pendingIncoming = incomingOpenRequests.filter((request) => request.status === "venter").length;
+  const sortedMyRequests = [...myRequests].sort(
+    (a, b) => getRequestSortValue(a.status) - getRequestSortValue(b.status)
+  );
+  const approvedRequestMatches = myRequests
+    .filter((request) => request.status === "godkjent")
+    .map((request) => matches.find((match) => match.id === request.matchId))
+    .filter((match): match is Match => Boolean(match))
+    .filter((match) => !hostedMatches.some((hostedMatch) => hostedMatch.id === match.id));
+  const myMatches = [...hostedMatches, ...approvedRequestMatches];
+  const agreedMyMatches = myMatches.filter((match) => match.status === "avtalt").length;
+  const pendingRequests = myRequests.filter((request) => request.status === "venter").length;
 
   return (
     <ScrollView contentContainerStyle={styles.list}>
@@ -2342,25 +2208,25 @@ function MineScreen({
 
       <View style={styles.mineStats}>
         <View style={styles.mineStatItem}>
-          <Text style={styles.mineStatNumber}>{totalOpenItems}</Text>
-          <Text style={styles.mineStatLabel}>Aktive</Text>
+          <Text style={styles.mineStatNumber}>{myMatches.length}</Text>
+          <Text style={styles.mineStatLabel}>Mine</Text>
         </View>
         <View style={styles.mineStatItem}>
-          <Text style={styles.mineStatNumber}>{pendingIncoming}</Text>
-          <Text style={styles.mineStatLabel}>Nye</Text>
+          <Text style={styles.mineStatNumber}>{agreedMyMatches}</Text>
+          <Text style={styles.mineStatLabel}>Avtalt</Text>
         </View>
         <View style={styles.mineStatItem}>
-          <Text style={styles.mineStatNumber}>{sentOpenRequests.length}</Text>
-          <Text style={styles.mineStatLabel}>Sendt</Text>
+          <Text style={styles.mineStatNumber}>{pendingRequests}</Text>
+          <Text style={styles.mineStatLabel}>Venter</Text>
         </View>
       </View>
 
       <View style={styles.mineSectionHeader}>
         <Text style={styles.sectionTitle}>Kamper jeg har lagt ut</Text>
-        <Text style={styles.mineSectionCount}>{openHostedMatches.length}</Text>
+        <Text style={styles.mineSectionCount}>{hostedMatches.length}</Text>
       </View>
-      {openHostedMatches.length === 0 ? <EmptyState text="Du har ingen åpne kamper ute." /> : null}
-      {openHostedMatches.map((match) => (
+      {hostedMatches.length === 0 ? <EmptyState text="Du har ikke lagt ut kamper enda." /> : null}
+      {hostedMatches.map((match) => (
         <MatchCard
           key={match.id}
           match={match}
@@ -2371,35 +2237,28 @@ function MineScreen({
       ))}
 
       <View style={styles.mineSectionHeader}>
-        <Text style={styles.sectionTitle}>Forespørsler på mine kamper</Text>
-        <Text style={styles.mineSectionCount}>{incomingOpenRequests.length}</Text>
+        <Text style={styles.sectionTitle}>Avtalte kamper som motstander</Text>
+        <Text style={styles.mineSectionCount}>{approvedRequestMatches.length}</Text>
       </View>
-      {incomingOpenRequests.length === 0 ? <EmptyState text="Ingen nye forespørsler på dine kamper." /> : null}
-      {incomingOpenRequests.map((request) => {
-        const match = matches.find((candidate) => candidate.id === request.matchId);
-        if (!match) {
-          return null;
-        }
-
-        return (
-          <Pressable key={request.id} style={styles.requestCard} onPress={() => onOpenRequest(request.id)}>
-            <View style={styles.requestInfo}>
-              <Text style={styles.cardTitle}>{match.title}</Text>
-              <Text style={styles.cardMeta}>
-                {formatTeamName(request.fromClub, request.fromTeam)} · {match.date}
-              </Text>
-            </View>
-            <RequestBadge status={request.status} />
-          </Pressable>
-        );
-      })}
+      {approvedRequestMatches.length === 0 ? <EmptyState text="Ingen avtalte bortekamper enda." /> : null}
+      {approvedRequestMatches.map((match) => (
+        <MatchCard
+          key={match.id}
+          match={match}
+          hasMyRequest
+          approvedRequest={myRequests.find(
+            (request) => request.matchId === match.id && request.status === "godkjent"
+          )}
+          onPress={() => onOpenMatch(match.id)}
+        />
+      ))}
 
       <View style={styles.mineSectionHeader}>
         <Text style={styles.sectionTitle}>Mine forespørsler</Text>
-        <Text style={styles.mineSectionCount}>{sentOpenRequests.length}</Text>
+        <Text style={styles.mineSectionCount}>{myRequests.length}</Text>
       </View>
-      {sentOpenRequests.length === 0 ? <EmptyState text="Du har ingen aktive forespørsler." /> : null}
-      {sentOpenRequests.map((request) => {
+      {myRequests.length === 0 ? <EmptyState text="Du har ikke sendt forespørsler enda." /> : null}
+      {sortedMyRequests.map((request) => {
         const match = matches.find((candidate) => candidate.id === request.matchId);
         if (!match) {
           return null;
@@ -2446,7 +2305,7 @@ function MatchCard({
 
       <View style={styles.cardDetails}>
         <InfoLine icon="calendar-outline" text={`${match.date} ${match.time}`} />
-        <InfoLine icon="location-outline" text={`${match.place}, ${match.city}`} />
+        <InfoLine icon="location-outline" text={match.place} />
       </View>
 
       {hasMyRequest ? <Text style={styles.requestHint}>Du har sendt forespørsel</Text> : null}
@@ -2507,8 +2366,7 @@ function CreateMatchModal({
             <Input label="Nivå" value={form.level} onChangeText={(level) => onChange({ ...form, level })} placeholder="Eks: Nivå 1, 2 eller 3" />
             <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026" />
             <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00" />
-            <Input label="Sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Bisset Stadion" />
-            <Input label="By/område" value={form.city} onChangeText={(city) => onChange({ ...form, city })} placeholder="Eks: Oslo" />
+            <Input label="Bane/sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Marienlyst stadion" />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
             <Input
               label="Kommentar"
@@ -2573,7 +2431,6 @@ function EditMatchModal({
 
           <ScrollView contentContainerStyle={styles.form}>
             <Input label="Tittel" value={form.title} onChangeText={(title) => onChange({ ...form, title })} placeholder="Eks: FC Oslo G13 søker kamp" />
-
             <Text style={styles.inputLabel}>Idrett</Text>
             <View style={styles.pickerField}>
               <Picker
@@ -2584,13 +2441,11 @@ function EditMatchModal({
                 <Picker.Item label="Håndball" value="Handball" />
               </Picker>
             </View>
-
             <Input label="Alder" value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} placeholder="Eks: G13/J13" />
             <Input label="Nivå" value={form.level} onChangeText={(level) => onChange({ ...form, level })} placeholder="Eks: Nivå 1, 2 eller 3" />
             <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026" />
             <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00" />
-            <Input label="Sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Bisset Stadion" />
-            <Input label="By/område" value={form.city} onChangeText={(city) => onChange({ ...form, city })} placeholder="Eks: Oslo" />
+            <Input label="Bane/sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Marienlyst stadion" />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
             <Input
               label="Kommentar"
@@ -2621,6 +2476,7 @@ function MatchDetailsModal({
   profile,
   requests,
   isSendingRequest,
+  isDeletingMatch,
   onClose,
   onSendRequest,
   onEditMatch,
@@ -2630,6 +2486,7 @@ function MatchDetailsModal({
   profile: TeamProfile;
   requests: MatchRequest[];
   isSendingRequest: boolean;
+  isDeletingMatch: boolean;
   onClose: () => void;
   onSendRequest: (match: Match) => void;
   onEditMatch: (match: Match) => void;
@@ -2664,7 +2521,11 @@ function MatchDetailsModal({
           <DetailRow label="Alder" value={match.ageGroup} />
           <DetailRow label="Nivå" value={match.level} />
           <DetailRow label="Dato" value={`${match.date} ${match.time}`} />
-          <DetailRow label="Sted" value={`${match.place}, ${match.city}`} />
+          <DetailRow label="Bane/sted" value={match.place} />
+          <Pressable style={styles.mapButton} onPress={() => openMapForPlace(match.place)}>
+            <Ionicons name="map-outline" size={18} color={colors.greenDark} />
+            <Text style={styles.mapButtonText}>Åpne i kart</Text>
+          </Pressable>
           <DetailRow label="Type" value={match.matchType} />
 
           <Text style={styles.sectionTitle}>Kontakt</Text>
@@ -2695,19 +2556,18 @@ function MatchDetailsModal({
           ) : (
             <View style={styles.actionStack}>
               <Text style={styles.requestHint}>Dette er en kamp du har lagt ut.</Text>
-
-              <Pressable
-                style={styles.primaryButtonFull}
-                onPress={() => onEditMatch(match)}
-              >
-                <Text style={styles.primaryButtonText}>Rediger kamp</Text>
+              <Pressable style={styles.secondaryButtonFull} onPress={() => onEditMatch(match)}>
+                <Ionicons name="create-outline" size={18} color={colors.greenDark} />
+                <Text style={styles.secondaryButtonText}>Rediger kamp</Text>
               </Pressable>
-
               <Pressable
-                style={styles.dangerButton}
+                style={[styles.dangerButton, isDeletingMatch && styles.disabledButton]}
+                disabled={isDeletingMatch}
                 onPress={() => onDeleteMatch(match)}
               >
-                <Text style={styles.dangerButtonText}>Slett kamp</Text>
+                <Text style={styles.dangerButtonText}>
+                  {isDeletingMatch ? "Sletter..." : "Slett kamp"}
+                </Text>
               </Pressable>
             </View>
           )}
@@ -2846,8 +2706,8 @@ function BottomTabs({
   const tabs: Array<{ key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
     { key: "home", label: "Hjem", icon: "home-outline" },
     { key: "matches", label: "Kamper", icon: "paper-plane-outline" },
-    { key: "inbox", label: "Mine kamper", icon: "calendar-outline" },
-    { key: "mine", label: "Forespørsler", icon: "file-tray-outline" }
+    { key: "inbox", label: "Innboks", icon: "file-tray-outline" },
+    { key: "mine", label: "Mine", icon: "person-outline" }
   ];
 
   return (
@@ -2930,6 +2790,15 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function openMapForPlace(place: string) {
+  const query = encodeURIComponent(place.trim());
+  if (!query) {
+    return;
+  }
+
+  Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
+}
+
 function RequestBadge({ status }: { status: RequestStatus }) {
   const style =
     status === "avslatt"
@@ -2961,9 +2830,9 @@ function getTabTitle(tab: Tab) {
     return "Kamper";
   }
   if (tab === "inbox") {
-    return "Mine kamper";
+    return "Innboks";
   }
-  return "Forespørsler";
+  return "Mine";
 }
 
 function formatTeamName(club: string, team: string) {
@@ -4078,6 +3947,40 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     minHeight: 52,
     paddingHorizontal: 18
+  },
+  secondaryButtonFull: {
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "center",
+    minHeight: 52,
+    paddingHorizontal: 18
+  },
+  secondaryButtonText: {
+    color: colors.greenDark,
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  mapButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 7,
+    minHeight: 42,
+    paddingHorizontal: 13
+  },
+  mapButtonText: {
+    color: colors.greenDark,
+    fontSize: 14,
+    fontWeight: "900"
   },
   disabledButton: {
     opacity: 0.65
