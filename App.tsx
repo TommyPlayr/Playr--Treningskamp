@@ -2492,7 +2492,7 @@ function MatchDetailsModal({
   isSendingRequest: boolean;
   onClose: () => void;
   onSendRequest: (match: Match) => void;
-  onEditMatch: () => void;
+  onEditMatch: (match: Match) => void;
   onDeleteMatch: (match: Match) => void;
 }) {
   if (!match) {
@@ -2558,7 +2558,7 @@ function MatchDetailsModal({
 
               <Pressable
                 style={styles.primaryButtonFull}
-                onPress={onEditMatch}
+                onPress={() => onEditMatch(match)}
               >
                 <Text style={styles.primaryButtonText}>Rediger kamp</Text>
               </Pressable>
