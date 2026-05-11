@@ -1,4 +1,4 @@
-﻿import { StatusBar } from "expo-status-bar";
+import { StatusBar } from "expo-status-bar";
 import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
@@ -2260,7 +2260,66 @@ function MatchDetailsModal({
               </Text>
             </Pressable>
           ) : (
-            <Text style={styles.requestHint}>Dette er en kamp du har lagt ut.</Text>
+            <View style={styles.actionStack}>
+              <Text style={styles.requestHint}>Dette er en kamp du har lagt ut.</Text>
+
+              <Pressable
+                style={styles.primaryButtonFull}
+                onPress={() => Alert.alert("Rediger kamp", "Redigering kobles på i neste steg.")}
+              >
+                <Text style={styles.primaryButtonText}>Rediger kamp</Text>
+              </Pressable>
+
+              <Pressable
+                style={styles.dangerButton}
+                onPress={() => {
+                  Alert.alert(
+                    "Slette kamp?",
+                    "Kampen fjernes helt fra appen.",
+                    [
+                      { text: "Avbryt", style: "cancel" },
+                      {
+                        text: "Slett kamp",
+                        style: "destructive",
+                        onPress: async () => {
+                          setSelectedMatchId(null);
+                          setMatches((current) => current.filter((item) => item.id !== match.id));
+                          setRequests((current) => current.filter((request) => request.matchId !== match.id));
+                          setMessages((current) =>
+                            current.filter(
+                              (message) =>
+                                !requests.some(
+                                  (request) => request.matchId === match.id && request.id === message.requestId
+                                )
+                            )
+                          );
+
+                          if (isSupabaseConfigured && supabase) {
+                            await supabase
+                              .from("matches")
+                              .update({ status: "ledig", approved_request_id: null })
+                              .eq("id", match.id)
+                              .eq("host_team_id", profile.id);
+
+                            const { error } = await supabase
+                              .from("matches")
+                              .delete()
+                              .eq("id", match.id)
+                              .eq("host_team_id", profile.id);
+
+                            if (error) {
+                              Alert.alert("Kampen ble ikke slettet", getReadableErrorMessage(error));
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  );
+                }}
+              >
+                <Text style={styles.dangerButtonText}>Slett kamp</Text>
+              </Pressable>
+            </View>
           )}
         </ScrollView>
       </SafeAreaView>
