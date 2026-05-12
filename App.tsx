@@ -26,7 +26,6 @@ type Tab = "home" | "matches" | "inbox" | "mine";
 type TabBadges = Partial<Record<Tab, number>>;
 type MatchStatus = "ledig" | "avtalt";
 type RequestStatus = "venter" | "godkjent" | "avslatt";
-type NotificationType = "request_sent" | "request_approved" | "request_declined" | "request_withdrawn" | "match_canceled";
 
 type TeamProfile = {
   id: string;
@@ -76,19 +75,6 @@ type ChatMessage = {
   requestId: string;
   sender: string;
   text: string;
-  createdAt: string;
-};
-
-type AppNotification = {
-  id: string;
-  recipientTeamId: string;
-  actorTeamId?: string;
-  matchId?: string;
-  requestId?: string;
-  type: NotificationType;
-  title: string;
-  body: string;
-  readAt?: string;
   createdAt: string;
 };
 
@@ -142,19 +128,6 @@ type DatabaseChatMessageRow = {
         full_name: string;
       }
     | null;
-};
-
-type DatabaseNotificationRow = {
-  id: string;
-  recipient_team_id: string;
-  actor_team_id: string | null;
-  match_id: string | null;
-  request_id: string | null;
-  type: NotificationType;
-  title: string;
-  body: string | null;
-  read_at: string | null;
-  created_at: string;
 };
 
 type DatabaseTeamRow = {
@@ -401,7 +374,8 @@ export default function App() {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
-  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [seenIncomingCount, setSeenIncomingCount] = useState(0);
+  const [seenApprovedCount, setSeenApprovedCount] = useState(0);
 
   const selectedMatch = matches.find((match) => match.id === selectedMatchId) ?? null;
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
@@ -432,58 +406,499 @@ export default function App() {
     [myRequests]
   );
 
-  const requestNotificationTypes: NotificationType[] = ["request_sent", "request_declined", "request_withdrawn"];
-  const matchNotificationTypes: NotificationType[] = ["request_approved", "match_canceled"];
+  const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
+  const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
 
-  const visibleIncomingNotificationCount = useMemo(
-    () =>
-      notifications.filter(
-        (notification) => !notification.readAt && requestNotificationTypes.includes(notification.type)
-      ).length,
-    [notifications]
-  );
-
-  const visibleApprovedNotificationCount = useMemo(
-    () =>
-      notifications.filter(
-        (notification) => !notification.readAt && matchNotificationTypes.includes(notification.type)
-      ).length,
-    [notifications]
-  );
-
-  const createNotification = async ({
-    recipientTeamId,
-    actorTeamId,
-    matchId,
-    requestId,
-    type,
-    title,
-    body
-  }: {
-    recipientTeamId: string;
-    actorTeamId: string;
-    matchId: string;
-    requestId: string;
-    type: string;
-    title: string;
-    body: string;
-  }) => {
-    if (!isSupabaseConfigured || !supabase || recipientTeamId === actorTeamId) {
+  const saveSeenNotificationCounts = (incoming: number, approved: number) => {
+    if (typeof window === "undefined" || !currentProfile.id) {
       return;
     }
 
-    const { error } = await supabase.from("notifications").insert({
-      recipient_team_id: recipientTeamId,
-      actor_team_id: actorTeamId,
-      match_id: matchId,
-      request_id: requestId,
-      type,
-      title,
-      body
+    window.localStorage.setItem(
+      `playr-seen-notification-counts-${currentProfile.id}`,
+      JSON.stringify({ incoming, approved })
+    );
+  };
+
+  useEffect(() => {
+    if (!appDataReady || !currentProfile.id || typeof window === "undefined") {
+      return;
+    }
+
+    const key = `playr-seen-notification-counts-${currentProfile.id}`;
+    const shouldClear = new URLSearchParams(window.location.search).get("clearNotifications") === "1";
+    const saved = window.localStorage.getItem(key);
+
+    if (shouldClear || !saved) {
+      setSeenIncomingCount(pendingIncomingCount);
+      setSeenApprovedCount(approvedMyRequestsCount);
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({ incoming: pendingIncomingCount, approved: approvedMyRequestsCount })
+      );
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(saved);
+      setSeenIncomingCount(Number(parsed.incoming) || 0);
+      setSeenApprovedCount(Number(parsed.approved) || 0);
+    } catch {
+      setSeenIncomingCount(pendingIncomingCount);
+      setSeenApprovedCount(approvedMyRequestsCount);
+      window.localStorage.setItem(
+        key,
+        JSON.stringify({ incoming: pendingIncomingCount, approved: approvedMyRequestsCount })
+      );
+    }
+  }, [appDataReady, currentProfile.id]);
+
+  useEffect(() => {
+    if (activeTab === "mine") {
+      setSeenIncomingCount(pendingIncomingCount);
+      saveSeenNotificationCounts(pendingIncomingCount, seenApprovedCount);
+    }
+
+    if (activeTab === "inbox") {
+      setSeenApprovedCount(approvedMyRequestsCount);
+      saveSeenNotificationCounts(seenIncomingCount, approvedMyRequestsCount);
+    }
+  }, [activeTab, pendingIncomingCount, approvedMyRequestsCount]);
+
+  useEffect(() => {
+    const nextIncoming = Math.min(seenIncomingCount, pendingIncomingCount);
+    const nextApproved = Math.min(seenApprovedCount, approvedMyRequestsCount);
+
+    if (nextIncoming !== seenIncomingCount) {
+      setSeenIncomingCount(nextIncoming);
+    }
+
+    if (nextApproved !== seenApprovedCount) {
+      setSeenApprovedCount(nextApproved);
+    }
+  }, [pendingIncomingCount, approvedMyRequestsCount, seenIncomingCount, seenApprovedCount]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase) {
+      return;
+    }
+
+    supabase.auth.getSession().then(({ data }) => {
+      setUserEmail(data.session?.user.email ?? null);
+      setAuthUserId(data.session?.user.id ?? null);
+      setAuthReady(true);
     });
 
-    if (error) {
-      Alert.alert("Varsel ble ikke lagret", getReadableErrorMessage(error));
+    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUserEmail(session?.user.email ?? null);
+      setAuthUserId(session?.user.id ?? null);
+      setProfileReady(!session?.user);
+      setHasTeamProfile(false);
+      setAppDataReady(!session?.user);
+      setAuthReady(true);
+      setSeenIncomingCount(0);
+      setSeenApprovedCount(0);
+    });
+
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadProfile = async () => {
+      if (!isSupabaseConfigured || !supabase || !authUserId) {
+        return;
+      }
+
+      setProfileReady(false);
+
+      const { data, error } = await supabase
+        .from("teams")
+        .select("id, sport, club, team, age_group, level, contact_name, users(email, phone)")
+        .eq("user_id", authUserId)
+        .limit(1)
+        .maybeSingle();
+
+      if (ignore) {
+        return;
+      }
+
+      if (error) {
+        setProfileReady(true);
+        return;
+      }
+
+      if (data) {
+        const profile = mapDatabaseTeam(data as DatabaseTeamRow);
+        setCurrentProfile(profile);
+        setForm(createEmptyForm(profile));
+        setHasTeamProfile(true);
+      } else {
+        setHasTeamProfile(false);
+      }
+
+      setProfileReady(true);
+    };
+
+    loadProfile();
+
+    return () => {
+      ignore = true;
+    };
+  }, [authUserId]);
+
+  useEffect(() => {
+    let ignore = false;
+
+    const loadAppData = async () => {
+      if (!isSupabaseConfigured || !supabase) {
+        return;
+      }
+
+      if (!authUserId) {
+        setAppDataReady(false);
+        return;
+      }
+
+      setAppDataReady(false);
+
+      let { data: matchData, error: matchError } = await supabase
+        .from("matches")
+        .select(
+          "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id, teams(club, team, contact_name)"
+        )
+        .order("match_date", { ascending: true });
+
+      if (matchError) {
+        const fallbackMatches = await supabase
+          .from("matches")
+          .select(
+            "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id"
+          )
+          .order("match_date", { ascending: true });
+
+        matchData = fallbackMatches.data;
+        matchError = fallbackMatches.error;
+      }
+
+      const { data: requestData, error: requestError } = await supabase
+        .from("match_requests")
+        .select("id, match_id, from_team_id, message, status, created_at, teams(club, team)")
+        .order("created_at", { ascending: false });
+
+      const { data: messageData, error: messageError } = await supabase
+        .from("chat_messages")
+        .select("id, request_id, sender_user_id, text, created_at, users(full_name)")
+        .order("created_at", { ascending: true });
+
+      if (ignore) {
+        return;
+      }
+
+      if (!matchError) {
+        const loadedMatches = ((matchData ?? []) as DatabaseMatchRow[]).map(mapDatabaseMatch);
+        setMatches(loadedMatches);
+      }
+
+      if (!requestError) {
+        const loadedRequests = ((requestData ?? []) as DatabaseRequestRow[]).map(mapDatabaseRequest);
+        setRequests(loadedRequests);
+      }
+
+      if (!messageError) {
+        const loadedMessages = ((messageData ?? []) as DatabaseChatMessageRow[]).map(mapDatabaseChatMessage);
+        setMessages(loadedMessages);
+      }
+
+      setAppDataReady(true);
+    };
+
+    loadAppData();
+
+    return () => {
+      ignore = true;
+    };
+  }, [authUserId]);
+
+  useEffect(() => {
+    setMessageText("");
+    setChatFeedback(null);
+  }, [selectedRequestId]);
+
+  const createMatch = async () => {
+    if (isPublishingMatch) {
+      return;
+    }
+
+    setCreateFeedback(null);
+
+    const cleanForm = {
+      sport: form.sport,
+      title: `${form.ageGroup.trim() || currentProfile.ageGroup} søker treningskamp`,
+      ageGroup: form.ageGroup.trim(),
+      level: form.level.trim(),
+      date: form.date.trim(),
+      time: form.time.trim(),
+      place: form.place.trim(),
+      city: form.city.trim() || "Ikke satt",
+      matchType: form.matchType.trim() || "Treningskamp",
+      comment: form.comment.trim()
+    };
+
+    if (
+      !cleanForm.ageGroup ||
+      !cleanForm.level ||
+      !cleanForm.date ||
+      !cleanForm.time ||
+      !cleanForm.place
+    ) {
+      setCreateFeedback("Fyll inn alder, nivå, dato, tid og bane/sted før du publiserer kampen.");
+      return;
+    }
+
+    const databaseDate = parseDateForDatabase(cleanForm.date);
+    if (!databaseDate) {
+      setCreateFeedback("Dato må skrives slik: 15.06.2026.");
+      return;
+    }
+
+    if (isPastDatabaseDate(databaseDate)) {
+      setCreateFeedback("Dato kan ikke være før dagens dato.");
+      return;
+    }
+
+    const databaseTime = parseTimeForDatabase(cleanForm.time);
+    if (!databaseTime) {
+      setCreateFeedback("Tid må skrives slik: 18:00.");
+      return;
+    }
+
+    const newMatchId = createLocalId();
+    const newMatch: Match = {
+      id: newMatchId,
+      title: cleanForm.title,
+      sport: cleanForm.sport,
+      hostTeamId: currentProfile.id,
+      hostClub: currentProfile.club,
+      hostTeam: currentProfile.team,
+      ageGroup: cleanForm.ageGroup,
+      level: cleanForm.level,
+      date: formatDatabaseDateForDisplay(databaseDate),
+      time: databaseTime.slice(0, 5),
+      place: cleanForm.place,
+      city: cleanForm.city,
+      matchType: cleanForm.matchType,
+      comment: cleanForm.comment,
+      contactName: currentProfile.contactName,
+      status: "ledig"
+    };
+
+    setMatches((current) => [newMatch, ...current]);
+    setForm(createEmptyForm(currentProfile));
+    setCreateVisible(false);
+    setActiveTab("mine");
+    setIsPublishingMatch(true);
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase
+          .from("matches")
+          .insert({
+            id: newMatchId,
+            host_team_id: currentProfile.id,
+            sport: cleanForm.sport,
+            title: cleanForm.title,
+            age_group: cleanForm.ageGroup,
+            level: cleanForm.level,
+            match_date: databaseDate,
+            match_time: databaseTime,
+            place: cleanForm.place,
+            city: cleanForm.city,
+            match_type: cleanForm.matchType,
+            comment: cleanForm.comment,
+            status: "ledig"
+          });
+
+        if (error) {
+          return;
+        }
+      }
+    } finally {
+      setIsPublishingMatch(false);
+    }
+  };
+
+  const openEditMatch = (match: Match) => {
+    if (match.hostTeamId !== currentProfile.id) {
+      return;
+    }
+
+    setSelectedMatchId(null);
+    setEditForm(createFormFromMatch(match));
+    setEditFeedback(null);
+    setEditMatchId(match.id);
+  };
+
+  const updateMatch = async () => {
+    if (!editingMatch || isUpdatingMatch) {
+      return;
+    }
+
+    setEditFeedback(null);
+
+    const cleanForm = {
+      sport: editForm.sport,
+      title: `${editForm.ageGroup.trim() || editingMatch.ageGroup} søker treningskamp`,
+      ageGroup: editForm.ageGroup.trim(),
+      level: editForm.level.trim(),
+      date: editForm.date.trim(),
+      time: editForm.time.trim(),
+      place: editForm.place.trim(),
+      city: editForm.city.trim() || "Ikke satt",
+      matchType: editForm.matchType.trim() || "Treningskamp",
+      comment: editForm.comment.trim()
+    };
+
+    if (
+      !cleanForm.ageGroup ||
+      !cleanForm.level ||
+      !cleanForm.date ||
+      !cleanForm.time ||
+      !cleanForm.place
+    ) {
+      setEditFeedback("Fyll inn alder, nivå, dato, tid og bane/sted før du lagrer.");
+      return;
+    }
+
+    const databaseDate = parseDateForDatabase(cleanForm.date);
+    if (!databaseDate) {
+      setEditFeedback("Dato må skrives slik: 15.06.2026.");
+      return;
+    }
+
+    if (isPastDatabaseDate(databaseDate)) {
+      setEditFeedback("Dato kan ikke være før dagens dato.");
+      return;
+    }
+
+    const databaseTime = parseTimeForDatabase(cleanForm.time);
+    if (!databaseTime) {
+      setEditFeedback("Tid må skrives slik: 18:00.");
+      return;
+    }
+
+    const updatedMatch: Match = {
+      ...editingMatch,
+      title: cleanForm.title,
+      sport: cleanForm.sport,
+      ageGroup: cleanForm.ageGroup,
+      level: cleanForm.level,
+      date: formatDatabaseDateForDisplay(databaseDate),
+      time: databaseTime.slice(0, 5),
+      place: cleanForm.place,
+      city: cleanForm.city,
+      matchType: cleanForm.matchType,
+      comment: cleanForm.comment
+    };
+
+    const previousMatches = matches;
+    setMatches((current) => current.map((match) => (match.id === updatedMatch.id ? updatedMatch : match)));
+    setIsUpdatingMatch(true);
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase
+          .from("matches")
+          .update({
+            sport: cleanForm.sport,
+            title: cleanForm.title,
+            age_group: cleanForm.ageGroup,
+            level: cleanForm.level,
+            match_date: databaseDate,
+            match_time: databaseTime,
+            place: cleanForm.place,
+            city: cleanForm.city,
+            match_type: cleanForm.matchType,
+            comment: cleanForm.comment
+          })
+          .eq("id", editingMatch.id)
+          .eq("host_team_id", currentProfile.id)
+          .select(
+            "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id, teams(club, team, contact_name)"
+          )
+          .single();
+
+        if (error) {
+          setMatches(previousMatches);
+          setEditFeedback(getReadableErrorMessage(error, "Kampen ble ikke lagret."));
+          return;
+        }
+
+        if (data) {
+          const savedMatch = mapDatabaseMatch(data as DatabaseMatchRow);
+          setMatches((current) => current.map((match) => (match.id === savedMatch.id ? savedMatch : match)));
+        }
+      }
+
+      setEditMatchId(null);
+    } finally {
+      setIsUpdatingMatch(false);
+    }
+  };
+
+  const deleteMatch = (match: Match) => {
+    if (isDeletingMatch) {
+      return;
+    }
+
+    if (match.hostTeamId !== currentProfile.id) {
+      if (Platform.OS === "web" && typeof window !== "undefined") {
+        window.alert("Du kan bare slette kamper du selv har lagt ut.");
+      } else {
+        Alert.alert("Kan ikke slette", "Du kan bare slette kamper du selv har lagt ut.");
+      }
+      return;
+    }
+
+    deleteMatchNow(match);
+  };
+
+  const deleteMatchNow = async (match: Match) => {
+    const previousMatches = matches;
+    const previousRequests = requests;
+    const previousMessages = messages;
+    const requestIds = new Set(requests.filter((request) => request.matchId === match.id).map((request) => request.id));
+
+    setIsDeletingMatch(true);
+    setSelectedMatchId(null);
+    setMatches((current) => current.filter((item) => item.id !== match.id));
+    setRequests((current) => current.filter((request) => request.matchId !== match.id));
+    setMessages((current) => current.filter((message) => !requestIds.has(message.requestId)));
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        await supabase
+          .from("matches")
+          .update({ status: "ledig", approved_request_id: null })
+          .eq("id", match.id)
+          .eq("host_team_id", currentProfile.id);
+
+        const { error } = await supabase
+          .from("matches")
+          .delete()
+          .eq("id", match.id)
+          .eq("host_team_id", currentProfile.id);
+
+        if (error) {
+          setMatches(previousMatches);
+          setRequests(previousRequests);
+          setMessages(previousMessages);
+          Alert.alert("Kampen ble ikke slettet", getReadableErrorMessage(error));
+        }
+      }
+    } finally {
+      setIsDeletingMatch(false);
     }
   };
 
@@ -565,20 +980,9 @@ export default function App() {
             return;
           }
 
-          if (updatedRequest) {
-            const updatedSavedRequest = mapDatabaseRequest(updatedRequest as DatabaseRequestRow);
-            setRequests((current) => replaceRequest(current, request.id, updatedSavedRequest));
-            await createNotification({
-              recipientTeamId: match.hostTeamId,
-              actorTeamId: currentProfile.id,
-              matchId: match.id,
-              requestId: updatedSavedRequest.id,
-              type: "request_sent",
-              title: "Ny forespørsel",
-              body: `${currentProfile.team} har sendt forespørsel på kampen din.`
-            });
-          }
-
+          setRequests((current) =>
+            replaceRequest(current, request.id, mapDatabaseRequest(updatedRequest as DatabaseRequestRow))
+          );
           return;
         }
 
@@ -603,15 +1007,6 @@ export default function App() {
         if (data) {
           const savedRequest = mapDatabaseRequest(data as DatabaseRequestRow);
           setRequests((current) => replaceRequest(current, request.id, savedRequest));
-          await createNotification({
-            recipientTeamId: match.hostTeamId,
-            actorTeamId: currentProfile.id,
-            matchId: match.id,
-            requestId: savedRequest.id,
-            type: "request_sent",
-            title: "Ny forespørsel",
-            body: `${currentProfile.team} har sendt forespørsel på kampen din.`
-          });
         }
       }
     } finally {
@@ -652,16 +1047,6 @@ export default function App() {
         .from("matches")
         .update({ status: "avtalt", approved_request_id: request.id })
         .eq("id", request.matchId);
-
-      await createNotification({
-        recipientTeamId: request.fromTeamId,
-        actorTeamId: currentProfile.id,
-        matchId: request.matchId,
-        requestId: request.id,
-        type: "request_approved",
-        title: "Kamp godkjent",
-        body: "Forespørselen din er godkjent. Kampen er avtalt."
-      });
     }
   };
 
@@ -692,16 +1077,6 @@ export default function App() {
           .update({ status: "ledig", approved_request_id: null })
           .eq("id", request.matchId);
       }
-
-      await createNotification({
-        recipientTeamId: request.fromTeamId,
-        actorTeamId: currentProfile.id,
-        matchId: request.matchId,
-        requestId: request.id,
-        type: "request_declined",
-        title: "Forespørsel avslått",
-        body: "Forespørselen din ble avslått."
-      });
     }
   };
 
@@ -1009,11 +1384,11 @@ export default function App() {
           pendingIncomingCount={visibleIncomingNotificationCount}
           approvedMyRequestsCount={visibleApprovedNotificationCount}
           onOpenInbox={() => {
-            markNotificationsRead(requestNotificationTypes);
+            setSeenIncomingCount(pendingIncomingCount);
             setActiveTab("mine");
           }}
           onOpenMine={() => {
-            markNotificationsRead(matchNotificationTypes);
+            setSeenApprovedCount(approvedMyRequestsCount);
             setActiveTab("inbox");
           }}
         />
@@ -1034,10 +1409,11 @@ export default function App() {
 
     if (activeTab === "inbox") {
       return (
-        <InboxScreen
-          requests={incomingRequests}
+        <AgreedMatchesScreen
+          profile={currentProfile}
           matches={matches}
-          onOpenRequest={(id) => setSelectedRequestId(id)}
+          requests={requests}
+          onOpenMatch={(id) => setSelectedMatchId(id)}
         />
       );
     }
@@ -1058,7 +1434,8 @@ export default function App() {
           setHasTeamProfile(false);
           setCurrentProfile(fallbackProfile);
           setProfileEditVisible(false);
-          setNotifications([]);
+          setSeenIncomingCount(0);
+          setSeenApprovedCount(0);
         }}
         onOpenMatch={(id) => setSelectedMatchId(id)}
         onOpenRequest={(id) => setSelectedRequestId(id)}
@@ -1106,18 +1483,6 @@ export default function App() {
     );
   }
 
-  useEffect(() => {
-    if (!authUserId || appDataReady) {
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setAppDataReady(true);
-    }, 8000);
-
-    return () => clearTimeout(timer);
-  }, [authUserId, appDataReady]);
-
   if (isSupabaseConfigured && hasTeamProfile && !appDataReady) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -1141,15 +1506,7 @@ export default function App() {
         <View style={styles.content}>{renderContent()}</View>
         <BottomTabs
           activeTab={activeTab}
-          onChange={(tab) => {
-            if (tab === "mine") {
-              markNotificationsRead(requestNotificationTypes);
-            }
-            if (tab === "inbox") {
-              markNotificationsRead(matchNotificationTypes);
-            }
-            setActiveTab(tab);
-          }}
+          onChange={setActiveTab}
           badges={{ inbox: visibleApprovedNotificationCount, mine: visibleIncomingNotificationCount }}
         />
       </View>
@@ -1864,6 +2221,62 @@ function MatchesScreen({
   );
 }
 
+function AgreedMatchesScreen({
+  profile,
+  matches,
+  requests,
+  onOpenMatch
+}: {
+  profile: TeamProfile;
+  matches: Match[];
+  requests: MatchRequest[];
+  onOpenMatch: (id: string) => void;
+}) {
+  const agreedMatches = matches.filter((match) => {
+    if (match.status !== "avtalt") {
+      return false;
+    }
+
+    if (match.hostTeamId === profile.id) {
+      return true;
+    }
+
+    return requests.some(
+      (request) =>
+        request.matchId === match.id &&
+        request.fromTeamId === profile.id &&
+        request.status === "godkjent"
+    );
+  });
+
+  return (
+    <FlatList
+      data={agreedMatches}
+      keyExtractor={(item) => item.id}
+      contentContainerStyle={styles.list}
+      ListEmptyComponent={<EmptyState text="Ingen avtalte kamper enda." />}
+      renderItem={({ item }) => {
+        const approvedRequest = requests.find((request) => request.id === item.approvedRequestId);
+        const hasMyRequest = requests.some(
+          (request) =>
+            request.matchId === item.id &&
+            request.fromTeamId === profile.id &&
+            request.status === "godkjent"
+        );
+
+        return (
+          <MatchCard
+            match={item}
+            hasMyRequest={hasMyRequest}
+            approvedRequest={approvedRequest}
+            onPress={() => onOpenMatch(item.id)}
+          />
+        );
+      }}
+    />
+  );
+}
+
 function InboxScreen({
   requests,
   matches,
@@ -1956,9 +2369,6 @@ function MineScreen({
   onOpenMatch: (id: string) => void;
   onOpenRequest: (id: string) => void;
 }) {
-  const sortedMyRequests = [...myRequests].sort(
-    (a, b) => getRequestSortValue(a.status) - getRequestSortValue(b.status)
-  );
   const approvedRequestMatches = myRequests
     .filter((request) => request.status === "godkjent")
     .map((request) => matches.find((match) => match.id === request.matchId))
@@ -1966,7 +2376,19 @@ function MineScreen({
     .filter((match) => !hostedMatches.some((hostedMatch) => hostedMatch.id === match.id));
   const myMatches = [...hostedMatches, ...approvedRequestMatches];
   const agreedMyMatches = myMatches.filter((match) => match.status === "avtalt").length;
-  const pendingRequests = myRequests.filter((request) => request.status === "venter").length;
+  const activeHostedMatches = hostedMatches.filter((match) => match.status !== "avtalt");
+  const activeMyRequests = myRequests.filter((request) => {
+    const match = matches.find((candidate) => candidate.id === request.matchId);
+    return request.status === "venter" && match?.status !== "avtalt";
+  });
+  const sortedMyRequests = [...activeMyRequests].sort(
+    (a, b) => getRequestSortValue(a.status) - getRequestSortValue(b.status)
+  );
+  const activeHostedIds = new Set(activeHostedMatches.map((match) => match.id));
+  const activeIncomingRequests = requests.filter(
+    (request) => request.status === "venter" && activeHostedIds.has(request.matchId)
+  );
+  const pendingRequests = activeMyRequests.length + activeIncomingRequests.length;
 
   return (
     <ScrollView contentContainerStyle={styles.list}>
@@ -2003,11 +2425,33 @@ function MineScreen({
       </View>
 
       <View style={styles.mineSectionHeader}>
-        <Text style={styles.sectionTitle}>Kamper jeg har lagt ut</Text>
-        <Text style={styles.mineSectionCount}>{hostedMatches.length}</Text>
+        <Text style={styles.sectionTitle}>Forespørsler på mine kamper</Text>
+        <Text style={styles.mineSectionCount}>{activeIncomingRequests.length}</Text>
       </View>
-      {hostedMatches.length === 0 ? <EmptyState text="Du har ikke lagt ut kamper enda." /> : null}
-      {hostedMatches.map((match) => (
+      {activeIncomingRequests.length === 0 ? <EmptyState text="Ingen nye forespørsler på dine kamper." /> : null}
+      {activeIncomingRequests.map((request) => {
+        const match = matches.find((candidate) => candidate.id === request.matchId);
+        if (!match) {
+          return null;
+        }
+
+        return (
+          <MatchCard
+            key={request.id}
+            match={match}
+            hasMyRequest={false}
+            approvedRequest={undefined}
+            onPress={() => onOpenRequest(request.id)}
+          />
+        );
+      })}
+
+      <View style={styles.mineSectionHeader}>
+        <Text style={styles.sectionTitle}>Kamper jeg har lagt ut</Text>
+        <Text style={styles.mineSectionCount}>{activeHostedMatches.length}</Text>
+      </View>
+      {activeHostedMatches.length === 0 ? <EmptyState text="Du har ingen aktive kamper ute nå." /> : null}
+      {activeHostedMatches.map((match) => (
         <MatchCard
           key={match.id}
           match={match}
@@ -2018,40 +2462,23 @@ function MineScreen({
       ))}
 
       <View style={styles.mineSectionHeader}>
-        <Text style={styles.sectionTitle}>Avtalte kamper som motstander</Text>
-        <Text style={styles.mineSectionCount}>{approvedRequestMatches.length}</Text>
-      </View>
-      {approvedRequestMatches.length === 0 ? <EmptyState text="Ingen avtalte bortekamper enda." /> : null}
-      {approvedRequestMatches.map((match) => (
-        <MatchCard
-          key={match.id}
-          match={match}
-          hasMyRequest
-          approvedRequest={myRequests.find(
-            (request) => request.matchId === match.id && request.status === "godkjent"
-          )}
-          onPress={() => onOpenMatch(match.id)}
-        />
-      ))}
-
-      <View style={styles.mineSectionHeader}>
         <Text style={styles.sectionTitle}>Mine forespørsler</Text>
-        <Text style={styles.mineSectionCount}>{myRequests.length}</Text>
+        <Text style={styles.mineSectionCount}>{activeMyRequests.length}</Text>
       </View>
-      {myRequests.length === 0 ? <EmptyState text="Du har ikke sendt forespørsler enda." /> : null}
+      {activeMyRequests.length === 0 ? <EmptyState text="Du har ingen aktive forespørsler nå." /> : null}
       {sortedMyRequests.map((request) => {
         const match = matches.find((candidate) => candidate.id === request.matchId);
         if (!match) {
           return null;
         }
         return (
-          <Pressable key={request.id} style={styles.requestCard} onPress={() => onOpenRequest(request.id)}>
-            <View style={styles.requestInfo}>
-              <Text style={styles.cardTitle}>{match.title}</Text>
-              <Text style={styles.cardMeta}>{formatTeamName(match.hostClub, match.hostTeam)} · {match.date}</Text>
-            </View>
-            <RequestBadge status={request.status} />
-          </Pressable>
+          <MatchCard
+            key={request.id}
+            match={match}
+            hasMyRequest
+            approvedRequest={undefined}
+            onPress={() => onOpenRequest(request.id)}
+          />
         );
       })}
     </ScrollView>
@@ -2729,21 +3156,6 @@ function mapDatabaseRequest(row: DatabaseRequestRow): MatchRequest {
     message: row.message ?? "",
     status: row.status,
     createdAt: formatRelativeDate(row.created_at)
-  };
-}
-
-function mapDatabaseNotification(row: DatabaseNotificationRow): AppNotification {
-  return {
-    id: row.id,
-    recipientTeamId: row.recipient_team_id,
-    actorTeamId: row.actor_team_id ?? undefined,
-    matchId: row.match_id ?? undefined,
-    requestId: row.request_id ?? undefined,
-    type: row.type,
-    title: row.title,
-    body: row.body ?? "",
-    readAt: row.read_at ?? undefined,
-    createdAt: row.created_at
   };
 }
 
