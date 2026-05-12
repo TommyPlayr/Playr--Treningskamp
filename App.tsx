@@ -1106,6 +1106,18 @@ export default function App() {
     );
   }
 
+  useEffect(() => {
+    if (!authUserId || appDataReady) {
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      setAppDataReady(true);
+    }, 8000);
+
+    return () => clearTimeout(timer);
+  }, [authUserId, appDataReady]);
+
   if (isSupabaseConfigured && hasTeamProfile && !appDataReady) {
     return (
       <SafeAreaView style={styles.safeArea}>
