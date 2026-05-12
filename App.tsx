@@ -461,488 +461,29 @@ export default function App() {
     body
   }: {
     recipientTeamId: string;
-    actorTeamId?: string;
-    matchId?: string;
-    requestId?: string;
-    type: NotificationType;
+    actorTeamId: string;
+    matchId: string;
+    requestId: string;
+    type: string;
     title: string;
     body: string;
   }) => {
-    if (!isSupabaseConfigured || !supabase || recipientTeamId === currentProfile.id && actorTeamId === currentProfile.id) {
+    if (!isSupabaseConfigured || !supabase || recipientTeamId === actorTeamId) {
       return;
     }
 
-    const { data, error } = await supabase
-      .from("notifications")
-      .insert({
-        recipient_team_id: recipientTeamId,
-        actor_team_id: actorTeamId ?? null,
-        match_id: matchId ?? null,
-        request_id: requestId ?? null,
-        type,
-        title,
-        body
-      })
-      .select("id, recipient_team_id, actor_team_id, match_id, request_id, type, title, body, read_at, created_at")
-      .single();
-
-    if (!error && data && recipientTeamId === currentProfile.id) {
-      setNotifications((current) => [mapDatabaseNotification(data as DatabaseNotificationRow), ...current]);
-    }
-  };
-
-  const markNotificationsRead = async (types: NotificationType[]) => {
-    const unreadIds = notifications
-      .filter((notification) => !notification.readAt && types.includes(notification.type))
-      .map((notification) => notification.id);
-
-    if (unreadIds.length === 0) {
-      return;
-    }
-
-    const readAt = new Date().toISOString();
-
-    setNotifications((current) =>
-      current.map((notification) =>
-        unreadIds.includes(notification.id) ? { ...notification, readAt } : notification
-      )
-    );
-
-    if (isSupabaseConfigured && supabase) {
-      await supabase.from("notifications").update({ read_at: readAt }).in("id", unreadIds);
-    }
-  };
-
-  useEffect(() => {
-    if (!isSupabaseConfigured || !supabase) {
-      return;
-    }
-
-    supabase.auth.getSession().then(({ data }) => {
-      setUserEmail(data.session?.user.email ?? null);
-      setAuthUserId(data.session?.user.id ?? null);
-      setAuthReady(true);
+    const { error } = await supabase.from("notifications").insert({
+      recipient_team_id: recipientTeamId,
+      actor_team_id: actorTeamId,
+      match_id: matchId,
+      request_id: requestId,
+      type,
+      title,
+      body
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUserEmail(session?.user.email ?? null);
-      setAuthUserId(session?.user.id ?? null);
-      setProfileReady(!session?.user);
-      setHasTeamProfile(false);
-      setAppDataReady(!session?.user);
-      setAuthReady(true);
-      setNotifications([]);
-    });
-
-    return () => data.subscription.unsubscribe();
-  }, []);
-
-  useEffect(() => {
-    let ignore = false;
-
-    const loadProfile = async () => {
-      if (!isSupabaseConfigured || !supabase || !authUserId) {
-        return;
-      }
-
-      setProfileReady(false);
-
-      const { data, error } = await supabase
-        .from("teams")
-        .select("id, sport, club, team, age_group, level, contact_name, users(email, phone)")
-        .eq("user_id", authUserId)
-        .limit(1)
-        .maybeSingle();
-
-      if (ignore) {
-        return;
-      }
-
-      if (error) {
-        setProfileReady(true);
-        return;
-      }
-
-      if (data) {
-        const profile = mapDatabaseTeam(data as DatabaseTeamRow);
-        setCurrentProfile(profile);
-        setForm(createEmptyForm(profile));
-        setHasTeamProfile(true);
-      } else {
-        setHasTeamProfile(false);
-      }
-
-      setProfileReady(true);
-    };
-
-    loadProfile();
-
-    return () => {
-      ignore = true;
-    };
-  }, [authUserId]);
-
-  useEffect(() => {
-    let ignore = false;
-
-    const loadAppData = async () => {
-      if (!isSupabaseConfigured || !supabase) {
-        return;
-      }
-
-      if (!authUserId) {
-        setAppDataReady(false);
-        return;
-      }
-
-      setAppDataReady(false);
-
-      let { data: matchData, error: matchError } = await supabase
-        .from("matches")
-        .select(
-          "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id, teams(club, team, contact_name)"
-        )
-        .order("match_date", { ascending: true });
-
-      if (matchError) {
-        const fallbackMatches = await supabase
-          .from("matches")
-          .select(
-            "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id"
-          )
-          .order("match_date", { ascending: true });
-
-        matchData = fallbackMatches.data;
-        matchError = fallbackMatches.error;
-      }
-
-      const { data: requestData, error: requestError } = await supabase
-        .from("match_requests")
-        .select("id, match_id, from_team_id, message, status, created_at, teams(club, team)")
-        .order("created_at", { ascending: false });
-
-      const { data: messageData, error: messageError } = await supabase
-        .from("chat_messages")
-        .select("id, request_id, sender_user_id, text, created_at, users(full_name)")
-        .order("created_at", { ascending: true });
-
-      const { data: notificationData, error: notificationError } = await supabase
-        .from("notifications")
-        .select("id, recipient_team_id, actor_team_id, match_id, request_id, type, title, body, read_at, created_at")
-        .order("created_at", { ascending: false });
-
-      if (ignore) {
-        return;
-      }
-
-      if (!matchError) {
-        const loadedMatches = ((matchData ?? []) as DatabaseMatchRow[]).map(mapDatabaseMatch);
-        setMatches(loadedMatches);
-      }
-
-      if (!requestError) {
-        const loadedRequests = ((requestData ?? []) as DatabaseRequestRow[]).map(mapDatabaseRequest);
-        setRequests(loadedRequests);
-      }
-
-      if (!messageError) {
-        const loadedMessages = ((messageData ?? []) as DatabaseChatMessageRow[]).map(mapDatabaseChatMessage);
-        setMessages(loadedMessages);
-      }
-
-      if (!notificationError) {
-        const loadedNotifications = ((notificationData ?? []) as DatabaseNotificationRow[]).map(mapDatabaseNotification);
-        setNotifications(loadedNotifications);
-      }
-
-      setAppDataReady(true);
-    };
-
-    loadAppData();
-
-    return () => {
-      ignore = true;
-    };
-  }, [authUserId]);
-
-  useEffect(() => {
-    setMessageText("");
-    setChatFeedback(null);
-  }, [selectedRequestId]);
-
-  const createMatch = async () => {
-    if (isPublishingMatch) {
-      return;
-    }
-
-    setCreateFeedback(null);
-
-    const cleanForm = {
-      sport: form.sport,
-      title: `${form.ageGroup.trim() || currentProfile.ageGroup} søker treningskamp`,
-      ageGroup: form.ageGroup.trim(),
-      level: form.level.trim(),
-      date: form.date.trim(),
-      time: form.time.trim(),
-      place: form.place.trim(),
-      city: form.city.trim() || "Ikke satt",
-      matchType: form.matchType.trim() || "Treningskamp",
-      comment: form.comment.trim()
-    };
-
-    if (
-      !cleanForm.ageGroup ||
-      !cleanForm.level ||
-      !cleanForm.date ||
-      !cleanForm.time ||
-      !cleanForm.place
-    ) {
-      setCreateFeedback("Fyll inn alder, nivå, dato, tid og bane/sted før du publiserer kampen.");
-      return;
-    }
-
-    const databaseDate = parseDateForDatabase(cleanForm.date);
-    if (!databaseDate) {
-      setCreateFeedback("Dato må skrives slik: 15.06.2026.");
-      return;
-    }
-
-    if (isPastDatabaseDate(databaseDate)) {
-      setCreateFeedback("Dato kan ikke være før dagens dato.");
-      return;
-    }
-
-    const databaseTime = parseTimeForDatabase(cleanForm.time);
-    if (!databaseTime) {
-      setCreateFeedback("Tid må skrives slik: 18:00.");
-      return;
-    }
-
-    const newMatchId = createLocalId();
-    const newMatch: Match = {
-      id: newMatchId,
-      title: cleanForm.title,
-      sport: cleanForm.sport,
-      hostTeamId: currentProfile.id,
-      hostClub: currentProfile.club,
-      hostTeam: currentProfile.team,
-      ageGroup: cleanForm.ageGroup,
-      level: cleanForm.level,
-      date: formatDatabaseDateForDisplay(databaseDate),
-      time: databaseTime.slice(0, 5),
-      place: cleanForm.place,
-      city: cleanForm.city,
-      matchType: cleanForm.matchType,
-      comment: cleanForm.comment,
-      contactName: currentProfile.contactName,
-      status: "ledig"
-    };
-
-    setMatches((current) => [newMatch, ...current]);
-    setForm(createEmptyForm(currentProfile));
-    setCreateVisible(false);
-    setActiveTab("mine");
-    setIsPublishingMatch(true);
-
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const { error } = await supabase
-          .from("matches")
-          .insert({
-            id: newMatchId,
-            host_team_id: currentProfile.id,
-            sport: cleanForm.sport,
-            title: cleanForm.title,
-            age_group: cleanForm.ageGroup,
-            level: cleanForm.level,
-            match_date: databaseDate,
-            match_time: databaseTime,
-            place: cleanForm.place,
-            city: cleanForm.city,
-            match_type: cleanForm.matchType,
-            comment: cleanForm.comment,
-            status: "ledig"
-          });
-
-        if (error) {
-          return;
-        }
-      }
-    } finally {
-      setIsPublishingMatch(false);
-    }
-  };
-
-  const openEditMatch = (match: Match) => {
-    if (match.hostTeamId !== currentProfile.id) {
-      return;
-    }
-
-    setSelectedMatchId(null);
-    setEditForm(createFormFromMatch(match));
-    setEditFeedback(null);
-    setEditMatchId(match.id);
-  };
-
-  const updateMatch = async () => {
-    if (!editingMatch || isUpdatingMatch) {
-      return;
-    }
-
-    setEditFeedback(null);
-
-    const cleanForm = {
-      sport: editForm.sport,
-      title: `${editForm.ageGroup.trim() || editingMatch.ageGroup} søker treningskamp`,
-      ageGroup: editForm.ageGroup.trim(),
-      level: editForm.level.trim(),
-      date: editForm.date.trim(),
-      time: editForm.time.trim(),
-      place: editForm.place.trim(),
-      city: editForm.city.trim() || "Ikke satt",
-      matchType: editForm.matchType.trim() || "Treningskamp",
-      comment: editForm.comment.trim()
-    };
-
-    if (
-      !cleanForm.ageGroup ||
-      !cleanForm.level ||
-      !cleanForm.date ||
-      !cleanForm.time ||
-      !cleanForm.place
-    ) {
-      setEditFeedback("Fyll inn alder, nivå, dato, tid og bane/sted før du lagrer.");
-      return;
-    }
-
-    const databaseDate = parseDateForDatabase(cleanForm.date);
-    if (!databaseDate) {
-      setEditFeedback("Dato må skrives slik: 15.06.2026.");
-      return;
-    }
-
-    if (isPastDatabaseDate(databaseDate)) {
-      setEditFeedback("Dato kan ikke være før dagens dato.");
-      return;
-    }
-
-    const databaseTime = parseTimeForDatabase(cleanForm.time);
-    if (!databaseTime) {
-      setEditFeedback("Tid må skrives slik: 18:00.");
-      return;
-    }
-
-    const updatedMatch: Match = {
-      ...editingMatch,
-      title: cleanForm.title,
-      sport: cleanForm.sport,
-      ageGroup: cleanForm.ageGroup,
-      level: cleanForm.level,
-      date: formatDatabaseDateForDisplay(databaseDate),
-      time: databaseTime.slice(0, 5),
-      place: cleanForm.place,
-      city: cleanForm.city,
-      matchType: cleanForm.matchType,
-      comment: cleanForm.comment
-    };
-
-    const previousMatches = matches;
-    setMatches((current) => current.map((match) => (match.id === updatedMatch.id ? updatedMatch : match)));
-    setIsUpdatingMatch(true);
-
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const { data, error } = await supabase
-          .from("matches")
-          .update({
-            sport: cleanForm.sport,
-            title: cleanForm.title,
-            age_group: cleanForm.ageGroup,
-            level: cleanForm.level,
-            match_date: databaseDate,
-            match_time: databaseTime,
-            place: cleanForm.place,
-            city: cleanForm.city,
-            match_type: cleanForm.matchType,
-            comment: cleanForm.comment
-          })
-          .eq("id", editingMatch.id)
-          .eq("host_team_id", currentProfile.id)
-          .select(
-            "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id, teams(club, team, contact_name)"
-          )
-          .single();
-
-        if (error) {
-          setMatches(previousMatches);
-          setEditFeedback(getReadableErrorMessage(error, "Kampen ble ikke lagret."));
-          return;
-        }
-
-        if (data) {
-          const savedMatch = mapDatabaseMatch(data as DatabaseMatchRow);
-          setMatches((current) => current.map((match) => (match.id === savedMatch.id ? savedMatch : match)));
-        }
-      }
-
-      setEditMatchId(null);
-    } finally {
-      setIsUpdatingMatch(false);
-    }
-  };
-
-  const deleteMatch = (match: Match) => {
-    if (isDeletingMatch) {
-      return;
-    }
-
-    if (match.hostTeamId !== currentProfile.id) {
-      if (Platform.OS === "web" && typeof window !== "undefined") {
-        window.alert("Du kan bare slette kamper du selv har lagt ut.");
-      } else {
-        Alert.alert("Kan ikke slette", "Du kan bare slette kamper du selv har lagt ut.");
-      }
-      return;
-    }
-
-    deleteMatchNow(match);
-  };
-
-  const deleteMatchNow = async (match: Match) => {
-    const previousMatches = matches;
-    const previousRequests = requests;
-    const previousMessages = messages;
-    const requestIds = new Set(requests.filter((request) => request.matchId === match.id).map((request) => request.id));
-
-    setIsDeletingMatch(true);
-    setSelectedMatchId(null);
-    setMatches((current) => current.filter((item) => item.id !== match.id));
-    setRequests((current) => current.filter((request) => request.matchId !== match.id));
-    setMessages((current) => current.filter((message) => !requestIds.has(message.requestId)));
-
-    try {
-      if (isSupabaseConfigured && supabase) {
-        await supabase
-          .from("matches")
-          .update({ status: "ledig", approved_request_id: null })
-          .eq("id", match.id)
-          .eq("host_team_id", currentProfile.id);
-
-        const { error } = await supabase
-          .from("matches")
-          .delete()
-          .eq("id", match.id)
-          .eq("host_team_id", currentProfile.id);
-
-        if (error) {
-          setMatches(previousMatches);
-          setRequests(previousRequests);
-          setMessages(previousMessages);
-          Alert.alert("Kampen ble ikke slettet", getReadableErrorMessage(error));
-        }
-      }
-    } finally {
-      setIsDeletingMatch(false);
+    if (error) {
+      Alert.alert("Varsel ble ikke lagret", getReadableErrorMessage(error));
     }
   };
 
@@ -1024,17 +565,20 @@ export default function App() {
             return;
           }
 
-          const updatedSavedRequest = mapDatabaseRequest(updatedRequest as DatabaseRequestRow);
-          setRequests((current) => replaceRequest(current, request.id, updatedSavedRequest));
-          await createNotification({
-            recipientTeamId: match.hostTeamId,
-            actorTeamId: currentProfile.id,
-            matchId: match.id,
-            requestId: updatedSavedRequest.id,
-            type: "request_sent",
-            title: "Ny forespørsel",
-            body: `${currentProfile.team} har sendt forespørsel på kampen din.`
-          });
+          if (updatedRequest) {
+            const updatedSavedRequest = mapDatabaseRequest(updatedRequest as DatabaseRequestRow);
+            setRequests((current) => replaceRequest(current, request.id, updatedSavedRequest));
+            await createNotification({
+              recipientTeamId: match.hostTeamId,
+              actorTeamId: currentProfile.id,
+              matchId: match.id,
+              requestId: updatedSavedRequest.id,
+              type: "request_sent",
+              title: "Ny forespørsel",
+              body: `${currentProfile.team} har sendt forespørsel på kampen din.`
+            });
+          }
+
           return;
         }
 
@@ -1059,15 +603,6 @@ export default function App() {
         if (data) {
           const savedRequest = mapDatabaseRequest(data as DatabaseRequestRow);
           setRequests((current) => replaceRequest(current, request.id, savedRequest));
-          await createNotification({
-            recipientTeamId: match.hostTeamId,
-            actorTeamId: currentProfile.id,
-            matchId: match.id,
-            requestId: savedRequest.id,
-            type: "request_sent",
-            title: "Ny forespørsel",
-            body: `${currentProfile.team} har sendt forespørsel på kampen din.`
-          });
           await createNotification({
             recipientTeamId: match.hostTeamId,
             actorTeamId: currentProfile.id,
