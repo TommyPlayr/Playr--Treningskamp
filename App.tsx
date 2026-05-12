@@ -1068,6 +1068,15 @@ export default function App() {
             title: "Ny forespørsel",
             body: `${currentProfile.team} har sendt forespørsel på kampen din.`
           });
+          await createNotification({
+            recipientTeamId: match.hostTeamId,
+            actorTeamId: currentProfile.id,
+            matchId: match.id,
+            requestId: savedRequest.id,
+            type: "request_sent",
+            title: "Ny forespørsel",
+            body: `${currentProfile.team} har sendt forespørsel på kampen din.`
+          });
         }
       }
     } finally {
