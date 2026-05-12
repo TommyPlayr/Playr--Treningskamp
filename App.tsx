@@ -2146,11 +2146,21 @@ function MatchesScreen({
   onCreateMatch: () => void;
 }) {
   const [sportFilter, setSportFilter] = useState<Sport | "Alle">("Alle");
+  const [ageFilter, setAgeFilter] = useState("Alle");
   const [hideAgreed, setHideAgreed] = useState(false);
   const [searchText, setSearchText] = useState("");
+
+  const ageOptions = useMemo(
+    () =>
+      Array.from(new Set(matches.map((match) => match.ageGroup).filter(Boolean))).sort((a, b) =>
+        a.localeCompare(b, "no-NO", { numeric: true })
+      ),
+    [matches]
+  );
   const filtered = matches
     .filter((match) => {
       const sportMatches = sportFilter === "Alle" || match.sport === sportFilter;
+    const ageMatches = ageFilter === "Alle" || match.ageGroup === ageFilter;
       const statusMatches = !hideAgreed || match.status !== "avtalt";
       const search = searchText.trim().toLowerCase();
       const searchMatches =
@@ -2159,7 +2169,7 @@ function MatchesScreen({
           .join(" ")
           .toLowerCase()
           .includes(search);
-      return sportMatches && statusMatches && searchMatches;
+      return sportMatches && ageMatches && statusMatches && searchMatches;
     })
     .sort((a, b) => {
       const statusA = a.status === "avtalt" ? 1 : 0;
@@ -2179,6 +2189,18 @@ function MatchesScreen({
             <Picker.Item label="Alle idretter" value="Alle" />
             <Picker.Item label="Fotball" value="Fotball" />
             <Picker.Item label="Håndball" value="Handball" />
+          </Picker>
+        </View>
+        <View style={styles.filterPill}>
+          <Picker
+            selectedValue={ageFilter}
+            onValueChange={setAgeFilter}
+            style={styles.compactPicker}
+          >
+            <Picker.Item label="Alle aldre" value="Alle" />
+            {ageOptions.map((age) => (
+              <Picker.Item key={age} label={age} value={age} />
+            ))}
           </Picker>
         </View>
         <Pressable style={styles.iconButton} onPress={onCreateMatch}>
