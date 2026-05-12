@@ -26,6 +26,7 @@ type Tab = "home" | "matches" | "inbox" | "mine";
 type TabBadges = Partial<Record<Tab, number>>;
 type MatchStatus = "ledig" | "avtalt";
 type RequestStatus = "venter" | "godkjent" | "avslatt";
+type NotificationType = "request_sent" | "request_approved" | "request_declined" | "request_withdrawn" | "match_canceled";
 
 type TeamProfile = {
   id: string;
@@ -75,6 +76,19 @@ type ChatMessage = {
   requestId: string;
   sender: string;
   text: string;
+  createdAt: string;
+};
+
+type AppNotification = {
+  id: string;
+  recipientTeamId: string;
+  actorTeamId?: string;
+  matchId?: string;
+  requestId?: string;
+  type: NotificationType;
+  title: string;
+  body: string;
+  readAt?: string;
   createdAt: string;
 };
 
@@ -128,6 +142,19 @@ type DatabaseChatMessageRow = {
         full_name: string;
       }
     | null;
+};
+
+type DatabaseNotificationRow = {
+  id: string;
+  recipient_team_id: string;
+  actor_team_id: string | null;
+  match_id: string | null;
+  request_id: string | null;
+  type: NotificationType;
+  title: string;
+  body: string | null;
+  read_at: string | null;
+  created_at: string;
 };
 
 type DatabaseTeamRow = {
@@ -374,8 +401,7 @@ export default function App() {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
-  const [seenIncomingCount, setSeenIncomingCount] = useState(0);
-  const [seenApprovedCount, setSeenApprovedCount] = useState(0);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
 
   const selectedMatch = matches.find((match) => match.id === selectedMatchId) ?? null;
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
@@ -406,77 +432,86 @@ export default function App() {
     [myRequests]
   );
 
-  const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
-  const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
+  const requestNotificationTypes: NotificationType[] = ["request_sent", "request_declined", "request_withdrawn"];
+  const matchNotificationTypes: NotificationType[] = ["request_approved", "match_canceled"];
 
-  const saveSeenNotificationCounts = (incoming: number, approved: number) => {
-    if (typeof window === "undefined" || !currentProfile.id) {
+  const visibleIncomingNotificationCount = useMemo(
+    () =>
+      notifications.filter(
+        (notification) => !notification.readAt && requestNotificationTypes.includes(notification.type)
+      ).length,
+    [notifications]
+  );
+
+  const visibleApprovedNotificationCount = useMemo(
+    () =>
+      notifications.filter(
+        (notification) => !notification.readAt && matchNotificationTypes.includes(notification.type)
+      ).length,
+    [notifications]
+  );
+
+  const createNotification = async ({
+    recipientTeamId,
+    actorTeamId,
+    matchId,
+    requestId,
+    type,
+    title,
+    body
+  }: {
+    recipientTeamId: string;
+    actorTeamId?: string;
+    matchId?: string;
+    requestId?: string;
+    type: NotificationType;
+    title: string;
+    body: string;
+  }) => {
+    if (!isSupabaseConfigured || !supabase || recipientTeamId === currentProfile.id && actorTeamId === currentProfile.id) {
       return;
     }
 
-    window.localStorage.setItem(
-      `playr-seen-notification-counts-${currentProfile.id}`,
-      JSON.stringify({ incoming, approved })
-    );
+    const { data, error } = await supabase
+      .from("notifications")
+      .insert({
+        recipient_team_id: recipientTeamId,
+        actor_team_id: actorTeamId ?? null,
+        match_id: matchId ?? null,
+        request_id: requestId ?? null,
+        type,
+        title,
+        body
+      })
+      .select("id, recipient_team_id, actor_team_id, match_id, request_id, type, title, body, read_at, created_at")
+      .single();
+
+    if (!error && data && recipientTeamId === currentProfile.id) {
+      setNotifications((current) => [mapDatabaseNotification(data as DatabaseNotificationRow), ...current]);
+    }
   };
 
-  useEffect(() => {
-    if (!appDataReady || !currentProfile.id || typeof window === "undefined") {
+  const markNotificationsRead = async (types: NotificationType[]) => {
+    const unreadIds = notifications
+      .filter((notification) => !notification.readAt && types.includes(notification.type))
+      .map((notification) => notification.id);
+
+    if (unreadIds.length === 0) {
       return;
     }
 
-    const key = `playr-seen-notification-counts-${currentProfile.id}`;
-    const shouldClear = new URLSearchParams(window.location.search).get("clearNotifications") === "1";
-    const saved = window.localStorage.getItem(key);
+    const readAt = new Date().toISOString();
 
-    if (shouldClear || !saved) {
-      setSeenIncomingCount(pendingIncomingCount);
-      setSeenApprovedCount(approvedMyRequestsCount);
-      window.localStorage.setItem(
-        key,
-        JSON.stringify({ incoming: pendingIncomingCount, approved: approvedMyRequestsCount })
-      );
-      return;
+    setNotifications((current) =>
+      current.map((notification) =>
+        unreadIds.includes(notification.id) ? { ...notification, readAt } : notification
+      )
+    );
+
+    if (isSupabaseConfigured && supabase) {
+      await supabase.from("notifications").update({ read_at: readAt }).in("id", unreadIds);
     }
-
-    try {
-      const parsed = JSON.parse(saved);
-      setSeenIncomingCount(Number(parsed.incoming) || 0);
-      setSeenApprovedCount(Number(parsed.approved) || 0);
-    } catch {
-      setSeenIncomingCount(pendingIncomingCount);
-      setSeenApprovedCount(approvedMyRequestsCount);
-      window.localStorage.setItem(
-        key,
-        JSON.stringify({ incoming: pendingIncomingCount, approved: approvedMyRequestsCount })
-      );
-    }
-  }, [appDataReady, currentProfile.id]);
-
-  useEffect(() => {
-    if (activeTab === "mine") {
-      setSeenIncomingCount(pendingIncomingCount);
-      saveSeenNotificationCounts(pendingIncomingCount, seenApprovedCount);
-    }
-
-    if (activeTab === "inbox") {
-      setSeenApprovedCount(approvedMyRequestsCount);
-      saveSeenNotificationCounts(seenIncomingCount, approvedMyRequestsCount);
-    }
-  }, [activeTab, pendingIncomingCount, approvedMyRequestsCount]);
-
-  useEffect(() => {
-    const nextIncoming = Math.min(seenIncomingCount, pendingIncomingCount);
-    const nextApproved = Math.min(seenApprovedCount, approvedMyRequestsCount);
-
-    if (nextIncoming !== seenIncomingCount) {
-      setSeenIncomingCount(nextIncoming);
-    }
-
-    if (nextApproved !== seenApprovedCount) {
-      setSeenApprovedCount(nextApproved);
-    }
-  }, [pendingIncomingCount, approvedMyRequestsCount, seenIncomingCount, seenApprovedCount]);
+  };
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -496,8 +531,7 @@ export default function App() {
       setHasTeamProfile(false);
       setAppDataReady(!session?.user);
       setAuthReady(true);
-      setSeenIncomingCount(0);
-      setSeenApprovedCount(0);
+      setNotifications([]);
     });
 
     return () => data.subscription.unsubscribe();
@@ -592,6 +626,11 @@ export default function App() {
         .select("id, request_id, sender_user_id, text, created_at, users(full_name)")
         .order("created_at", { ascending: true });
 
+      const { data: notificationData, error: notificationError } = await supabase
+        .from("notifications")
+        .select("id, recipient_team_id, actor_team_id, match_id, request_id, type, title, body, read_at, created_at")
+        .order("created_at", { ascending: false });
+
       if (ignore) {
         return;
       }
@@ -609,6 +648,11 @@ export default function App() {
       if (!messageError) {
         const loadedMessages = ((messageData ?? []) as DatabaseChatMessageRow[]).map(mapDatabaseChatMessage);
         setMessages(loadedMessages);
+      }
+
+      if (!notificationError) {
+        const loadedNotifications = ((notificationData ?? []) as DatabaseNotificationRow[]).map(mapDatabaseNotification);
+        setNotifications(loadedNotifications);
       }
 
       setAppDataReady(true);
@@ -980,9 +1024,17 @@ export default function App() {
             return;
           }
 
-          setRequests((current) =>
-            replaceRequest(current, request.id, mapDatabaseRequest(updatedRequest as DatabaseRequestRow))
-          );
+          const updatedSavedRequest = mapDatabaseRequest(updatedRequest as DatabaseRequestRow);
+          setRequests((current) => replaceRequest(current, request.id, updatedSavedRequest));
+          await createNotification({
+            recipientTeamId: match.hostTeamId,
+            actorTeamId: currentProfile.id,
+            matchId: match.id,
+            requestId: updatedSavedRequest.id,
+            type: "request_sent",
+            title: "Ny forespørsel",
+            body: `${currentProfile.team} har sendt forespørsel på kampen din.`
+          });
           return;
         }
 
@@ -1007,6 +1059,15 @@ export default function App() {
         if (data) {
           const savedRequest = mapDatabaseRequest(data as DatabaseRequestRow);
           setRequests((current) => replaceRequest(current, request.id, savedRequest));
+          await createNotification({
+            recipientTeamId: match.hostTeamId,
+            actorTeamId: currentProfile.id,
+            matchId: match.id,
+            requestId: savedRequest.id,
+            type: "request_sent",
+            title: "Ny forespørsel",
+            body: `${currentProfile.team} har sendt forespørsel på kampen din.`
+          });
         }
       }
     } finally {
@@ -1047,6 +1108,16 @@ export default function App() {
         .from("matches")
         .update({ status: "avtalt", approved_request_id: request.id })
         .eq("id", request.matchId);
+
+      await createNotification({
+        recipientTeamId: request.fromTeamId,
+        actorTeamId: currentProfile.id,
+        matchId: request.matchId,
+        requestId: request.id,
+        type: "request_approved",
+        title: "Kamp godkjent",
+        body: "Forespørselen din er godkjent. Kampen er avtalt."
+      });
     }
   };
 
@@ -1077,6 +1148,16 @@ export default function App() {
           .update({ status: "ledig", approved_request_id: null })
           .eq("id", request.matchId);
       }
+
+      await createNotification({
+        recipientTeamId: request.fromTeamId,
+        actorTeamId: currentProfile.id,
+        matchId: request.matchId,
+        requestId: request.id,
+        type: "request_declined",
+        title: "Forespørsel avslått",
+        body: "Forespørselen din ble avslått."
+      });
     }
   };
 
@@ -1384,11 +1465,11 @@ export default function App() {
           pendingIncomingCount={visibleIncomingNotificationCount}
           approvedMyRequestsCount={visibleApprovedNotificationCount}
           onOpenInbox={() => {
-            setSeenIncomingCount(pendingIncomingCount);
+            markNotificationsRead(requestNotificationTypes);
             setActiveTab("mine");
           }}
           onOpenMine={() => {
-            setSeenApprovedCount(approvedMyRequestsCount);
+            markNotificationsRead(matchNotificationTypes);
             setActiveTab("inbox");
           }}
         />
@@ -1433,8 +1514,7 @@ export default function App() {
           setHasTeamProfile(false);
           setCurrentProfile(fallbackProfile);
           setProfileEditVisible(false);
-          setSeenIncomingCount(0);
-          setSeenApprovedCount(0);
+          setNotifications([]);
         }}
         onOpenMatch={(id) => setSelectedMatchId(id)}
         onOpenRequest={(id) => setSelectedRequestId(id)}
@@ -1505,7 +1585,15 @@ export default function App() {
         <View style={styles.content}>{renderContent()}</View>
         <BottomTabs
           activeTab={activeTab}
-          onChange={setActiveTab}
+          onChange={(tab) => {
+            if (tab === "mine") {
+              markNotificationsRead(requestNotificationTypes);
+            }
+            if (tab === "inbox") {
+              markNotificationsRead(matchNotificationTypes);
+            }
+            setActiveTab(tab);
+          }}
           badges={{ inbox: visibleApprovedNotificationCount, mine: visibleIncomingNotificationCount }}
         />
       </View>
@@ -3085,6 +3173,21 @@ function mapDatabaseRequest(row: DatabaseRequestRow): MatchRequest {
     message: row.message ?? "",
     status: row.status,
     createdAt: formatRelativeDate(row.created_at)
+  };
+}
+
+function mapDatabaseNotification(row: DatabaseNotificationRow): AppNotification {
+  return {
+    id: row.id,
+    recipientTeamId: row.recipient_team_id,
+    actorTeamId: row.actor_team_id ?? undefined,
+    matchId: row.match_id ?? undefined,
+    requestId: row.request_id ?? undefined,
+    type: row.type,
+    title: row.title,
+    body: row.body ?? "",
+    readAt: row.read_at ?? undefined,
+    createdAt: row.created_at
   };
 }
 
