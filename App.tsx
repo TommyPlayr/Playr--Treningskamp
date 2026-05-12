@@ -1551,6 +1551,12 @@ export default function App() {
         onEditMatch={openEditMatch}
         onDeleteMatch={deleteMatch}
         onCancelAgreedMatch={cancelAgreedMatch}
+        onOpenChat={(requestId) => {
+          setSelectedMatchId(null);
+          setTimeout(() => {
+            setSelectedRequestId(requestId);
+          }, 100);
+        }}
       />
 
       <RequestDetailsModal
@@ -2712,7 +2718,8 @@ function MatchDetailsModal({
   onSendRequest,
   onEditMatch,
   onDeleteMatch,
-  onCancelAgreedMatch
+  onCancelAgreedMatch,
+  onOpenChat
 }: {
   match: Match | null;
   profile: TeamProfile;
@@ -2725,6 +2732,7 @@ function MatchDetailsModal({
   onEditMatch: (match: Match) => void;
   onDeleteMatch: (match: Match) => void;
   onCancelAgreedMatch: (match: Match) => void;
+  onOpenChat: (requestId: string) => void;
 }) {
   if (!match) {
     return null;
@@ -2732,6 +2740,13 @@ function MatchDetailsModal({
 
   const myRequest = requests.find(
     (request) => request.matchId === match.id && request.fromTeamId === profile.id
+  );
+  const approvedRequest = requests.find(
+    (request) =>
+      request.id === match.approvedRequestId ||
+      (request.matchId === match.id &&
+        request.status === "godkjent" &&
+        (request.fromTeamId === profile.id || match.hostTeamId === profile.id))
   );
   const isOwnMatch = match.hostTeamId === profile.id;
   const requestButtonDisabled =
@@ -2769,6 +2784,13 @@ function MatchDetailsModal({
 
           <Text style={styles.sectionTitle}>Kommentar</Text>
           <Text style={styles.paragraph}>{match.comment || "Ingen kommentar."}</Text>
+
+          {match.status === "avtalt" && approvedRequest ? (
+            <Pressable style={styles.secondaryButtonFull} onPress={() => onOpenChat(approvedRequest.id)}>
+              <Ionicons name="chatbubble-ellipses-outline" size={18} color={colors.greenDark} />
+              <Text style={styles.secondaryButtonText}>Åpne chat</Text>
+            </Pressable>
+          ) : null}
 
           {!isOwnMatch ? (
             match.status === "avtalt" && myRequest?.status === "godkjent" ? (
