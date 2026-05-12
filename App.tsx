@@ -2148,18 +2148,24 @@ function MatchesScreen({
   const [sportFilter, setSportFilter] = useState<Sport | "Alle">("Alle");
   const [hideAgreed, setHideAgreed] = useState(false);
   const [searchText, setSearchText] = useState("");
-  const filtered = matches.filter((match) => {
-    const sportMatches = sportFilter === "Alle" || match.sport === sportFilter;
-    const statusMatches = !hideAgreed || match.status !== "avtalt";
-    const search = searchText.trim().toLowerCase();
-    const searchMatches =
-      !search ||
-      [match.title, match.hostClub, match.hostTeam, match.place, match.city, match.ageGroup, match.level]
-        .join(" ")
-        .toLowerCase()
-        .includes(search);
-    return sportMatches && statusMatches && searchMatches;
-  });
+  const filtered = matches
+    .filter((match) => {
+      const sportMatches = sportFilter === "Alle" || match.sport === sportFilter;
+      const statusMatches = !hideAgreed || match.status !== "avtalt";
+      const search = searchText.trim().toLowerCase();
+      const searchMatches =
+        !search ||
+        [match.title, match.hostClub, match.hostTeam, match.place, match.city, match.ageGroup, match.level]
+          .join(" ")
+          .toLowerCase()
+          .includes(search);
+      return sportMatches && statusMatches && searchMatches;
+    })
+    .sort((a, b) => {
+      const statusA = a.status === "avtalt" ? 1 : 0;
+      const statusB = b.status === "avtalt" ? 1 : 0;
+      return statusA - statusB || a.date.localeCompare(b.date) || a.time.localeCompare(b.time);
+    });
 
   return (
     <View style={styles.screen}>
@@ -2511,12 +2517,9 @@ function MatchCard({
         </View>
       </View>
 
-      <View style={styles.cardDetails}>
-        <InfoLine icon="calendar-outline" text={`${match.date} ${match.time}`} />
-        <InfoLine icon="location-outline" text={match.place} />
-      </View>
-
-      {hasMyRequest ? <Text style={styles.requestHint}>Du har sendt forespørsel</Text> : null}
+      <Text style={styles.cardCompactMeta} numberOfLines={1}>
+        {formatSport(match.sport)} · {match.ageGroup} · {match.level} · {match.date} {match.time} · {match.place}
+      </Text>
     </Pressable>
   );
 }
@@ -3731,7 +3734,7 @@ const styles = StyleSheet.create({
   },
   profileName: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800"
   },
   profileText: {
@@ -3815,7 +3818,7 @@ const styles = StyleSheet.create({
     minHeight: 46
   },
   list: {
-    gap: 12,
+    gap: 10,
     padding: 16,
     paddingBottom: 28
   },
@@ -3823,7 +3826,8 @@ const styles = StyleSheet.create({
     backgroundColor: colors.card,
     borderRadius: 8,
     borderWidth: 2,
-    padding: 16
+    paddingHorizontal: 12,
+    paddingVertical: 10
   },
   cardTop: {
     alignItems: "flex-start",
@@ -3836,26 +3840,26 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "800"
   },
   cardMeta: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     marginTop: 4
   },
   cardDetails: {
     gap: 6,
-    marginTop: 14
+    marginTop: 10
   },
   statusBadge: {
     borderRadius: 7,
-    paddingHorizontal: 12,
-    paddingVertical: 7
+    paddingHorizontal: 9,
+    paddingVertical: 5
   },
   statusText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900",
     textTransform: "capitalize"
   },
@@ -3867,13 +3871,13 @@ const styles = StyleSheet.create({
   infoText: {
     color: colors.text,
     flex: 1,
-    fontSize: 14
+    fontSize: 13
   },
   requestHint: {
     color: colors.greenDark,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "800",
-    marginTop: 12
+    marginTop: 8
   },
   inboxSummary: {
     alignItems: "center",
@@ -3933,8 +3937,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     color: colors.text,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     padding: 12
   },
   inboxCardFooter: {
@@ -3989,8 +3993,8 @@ const styles = StyleSheet.create({
   },
   accountProfileText: {
     color: colors.muted,
-    fontSize: 14,
-    lineHeight: 20,
+    fontSize: 13,
+    lineHeight: 18,
     marginBottom: 14
   },
   accountActions: {
@@ -4034,7 +4038,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     color: colors.greenDark,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: "900",
     minWidth: 34,
     overflow: "hidden",
