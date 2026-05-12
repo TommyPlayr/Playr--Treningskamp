@@ -2510,7 +2510,6 @@ function MatchCard({
       <View style={styles.cardTop}>
         <View style={styles.cardText}>
           <Text style={styles.cardTitle}>{cardTitle}</Text>
-          <Text style={styles.cardMeta}>{formatSport(match.sport)} · {match.ageGroup} · {match.level}</Text>
         </View>
         <View style={[styles.statusBadge, { backgroundColor: statusStyle.background }]}>
           <Text style={[styles.statusText, { color: statusStyle.text }]}>{match.status}</Text>
