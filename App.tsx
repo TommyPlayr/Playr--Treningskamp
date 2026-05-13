@@ -447,6 +447,11 @@ export default function App() {
 
   const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
   const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
+  const openCreateMatch = () => {
+    setForm({ ...createEmptyForm(currentProfile), ageGroup: "" });
+    setCreateFeedback(null);
+    setCreateVisible(true);
+  };
   const selectTeamProfile = (profile: TeamProfile) => {
     setCurrentProfile(profile);
     setForm(createEmptyForm(profile));
@@ -1565,7 +1570,7 @@ export default function App() {
           profile={currentProfile}
           matches={matches}
           onFindMatches={() => setActiveTab("matches")}
-          onCreateMatch={() => setCreateVisible(true)}
+          onCreateMatch={openCreateMatch}
           onOpenMatch={(id) => setSelectedMatchId(id)}
           onHeaderLogoChange={setHomeHeaderLogoVisible}
           pendingIncomingCount={visibleIncomingNotificationCount}
@@ -1589,7 +1594,7 @@ export default function App() {
           matches={matches}
           requests={requests}
           onOpenMatch={(id) => setSelectedMatchId(id)}
-          onCreateMatch={() => setCreateVisible(true)}
+          onCreateMatch={openCreateMatch}
         />
       );
     }
@@ -3462,7 +3467,7 @@ function AgeGroupInput({
           })}
         </View>
         <TextInput
-          style={styles.ageGroupInput}
+          style={[styles.ageGroupInput, !birthYear && styles.ageGroupInputEmpty]}
           value={birthYear}
           onChangeText={(text) => updateValue(prefix, text.replace(/\D/g, "").slice(0, 4))}
           placeholder="Eks. 2014"
@@ -3988,7 +3993,7 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   headerProfileWrap: {
-    alignItems: "center",
+    alignItems: "flex-start",
     left: 22,
     position: "absolute",
     right: 22,
@@ -4009,7 +4014,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: 4,
-    justifyContent: "center",
+    justifyContent: "flex-start",
     maxWidth: 260,
     paddingVertical: 2
   },
@@ -4789,6 +4794,9 @@ const styles = StyleSheet.create({
     minHeight: 50,
     paddingHorizontal: 14,
     width: 86
+  },
+  ageGroupInputEmpty: {
+    fontSize: 9
   },
   textArea: {
     minHeight: 96,
