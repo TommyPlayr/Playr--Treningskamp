@@ -734,10 +734,10 @@ export default function App() {
       return;
     }
 
-    setSelectedMatchId(null);
     setEditForm(createFormFromMatch(match));
     setEditFeedback(null);
     setEditMatchId(match.id);
+    setTimeout(() => setSelectedMatchId(null), 0);
   };
 
   const updateMatch = async () => {
@@ -1552,10 +1552,8 @@ export default function App() {
         onDeleteMatch={deleteMatch}
         onCancelAgreedMatch={cancelAgreedMatch}
         onOpenChat={(requestId) => {
-          setSelectedMatchId(null);
-          setTimeout(() => {
-            setSelectedRequestId(requestId);
-          }, 100);
+          setSelectedRequestId(requestId);
+          setTimeout(() => setSelectedMatchId(null), 0);
         }}
       />
 
@@ -2653,7 +2651,7 @@ function EditMatchModal({
   }
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet">
+    <Modal visible animationType="none" presentationStyle="pageSheet">
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -2753,7 +2751,7 @@ function MatchDetailsModal({
     isSendingRequest || match.status === "avtalt" || Boolean(myRequest && myRequest.status !== "avslatt");
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet">
+    <Modal visible animationType="none" presentationStyle="pageSheet">
       <SafeAreaView style={styles.modalSafe}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>{match.title}</Text>
@@ -2893,7 +2891,7 @@ function RequestDetailsModal({
   const canWithdraw = request.fromTeamId === profile.id && request.status !== "avslatt";
 
   return (
-    <Modal visible animationType="slide" presentationStyle="pageSheet">
+    <Modal visible animationType="none" presentationStyle="pageSheet">
       <SafeAreaView style={styles.modalSafe}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Forespørsel</Text>
@@ -4417,4 +4415,3 @@ const styles = StyleSheet.create({
     color: colors.greenDark
   }
 });
-
