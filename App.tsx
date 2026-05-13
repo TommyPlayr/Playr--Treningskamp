@@ -436,15 +436,34 @@ export default function App() {
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
   const editingMatch = matches.find((match) => match.id === editMatchId) ?? null;
 
+  const myTeamIds = useMemo(
+    () => new Set(teamProfiles.map((profile) => profile.id)),
+    [teamProfiles]
+  );
+
   const myHostedMatches = useMemo(
-    () => matches.filter((match) => match.hostTeamId === currentProfile.id),
-    [matches]
+    () => matches.filter((match) => isMatchOwnedByProfiles(match, teamProfiles)),
+    [matches, teamProfiles]
   );
 
   const myRequests = useMemo(
-    () => requests.filter((request) => request.fromTeamId === currentProfile.id),
-    [requests]
+    () => requests.filter((request) => myTeamIds.has(request.fromTeamId)),
+    [requests, myTeamIds]
   );
+
+  const selectedMatchProfile =
+    selectedMatch && isMatchOwnedByProfiles(selectedMatch, teamProfiles)
+      ? getProfileForMatch(selectedMatch, teamProfiles) ?? currentProfile
+      : currentProfile;
+  const selectedRequestMatch = selectedRequest
+    ? matches.find((match) => match.id === selectedRequest.matchId) ?? null
+    : null;
+  const selectedRequestProfile =
+    selectedRequest && selectedRequestMatch
+      ? getProfileForMatch(selectedRequestMatch, teamProfiles) ??
+        teamProfiles.find((profile) => profile.id === selectedRequest.fromTeamId) ??
+        currentProfile
+      : currentProfile;
 
   const incomingRequests = useMemo(() => {
     const hostedIds = new Set(myHostedMatches.map((match) => match.id));
@@ -792,7 +811,7 @@ export default function App() {
   };
 
   const openEditMatch = (match: Match) => {
-    if (match.hostTeamId !== currentProfile.id) {
+    if (!myTeamIds.has(match.hostTeamId)) {
       return;
     }
 
@@ -886,7 +905,7 @@ export default function App() {
             comment: cleanForm.comment
           })
           .eq("id", editingMatch.id)
-          .eq("host_team_id", currentProfile.id)
+          .eq("host_team_id", editingMatch.hostTeamId)
           .select(
             "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id, teams(club, team, contact_name)"
           )
@@ -915,7 +934,7 @@ export default function App() {
       return;
     }
 
-    if (match.hostTeamId !== currentProfile.id) {
+    if (!myTeamIds.has(match.hostTeamId)) {
       if (Platform.OS === "web" && typeof window !== "undefined") {
         window.alert("Du kan bare slette kamper du selv har lagt ut.");
       } else {
@@ -945,13 +964,13 @@ export default function App() {
           .from("matches")
           .update({ status: "ledig", approved_request_id: null })
           .eq("id", match.id)
-          .eq("host_team_id", currentProfile.id);
+          .eq("host_team_id", match.hostTeamId);
 
         const { error } = await supabase
           .from("matches")
           .delete()
           .eq("id", match.id)
-          .eq("host_team_id", currentProfile.id);
+          .eq("host_team_id", match.hostTeamId);
 
         if (error) {
           setMatches(previousMatches);
@@ -970,7 +989,7 @@ export default function App() {
       return;
     }
 
-    if (match.hostTeamId === currentProfile.id) {
+    if (myTeamIds.has(match.hostTeamId)) {
       Alert.alert("Dette er din kamp", "Du kan ikke sende forespørsel på en kamp du selv har lagt ut.");
       return;
     }
@@ -1187,7 +1206,7 @@ export default function App() {
         (request.matchId === match.id && request.status === "godkjent")
     );
 
-    const canCancel = match.hostTeamId === currentProfile.id || approvedRequest?.fromTeamId === currentProfile.id;
+    const canCancel = myTeamIds.has(match.hostTeamId) || Boolean(approvedRequest && myTeamIds.has(approvedRequest.fromTeamId));
 
     if (!approvedRequest || !canCancel) {
       Alert.alert("Kan ikke avlyse", "Du kan bare avlyse kamper du selv er involvert i.");
@@ -1622,8 +1641,7 @@ export default function App() {
     return (
       <MineScreen
         profile={currentProfile}
-        hostedMatches={myHostedMatches}
-        myRequests={myRequests}
+        profiles={teamProfiles}
         requests={requests}
         matches={matches}
         userEmail={userEmail}
@@ -1754,7 +1772,7 @@ export default function App() {
 
       <MatchDetailsModal
         match={selectedMatch}
-        profile={currentProfile}
+        profile={selectedMatchProfile}
         requests={requests}
         isSendingRequest={isSendingRequest}
         isDeletingMatch={isDeletingMatch}
@@ -1772,8 +1790,8 @@ export default function App() {
 
       <RequestDetailsModal
         request={selectedRequest}
-        profile={currentProfile}
-        match={selectedRequest ? matches.find((item) => item.id === selectedRequest.matchId) ?? null : null}
+        profile={selectedRequestProfile}
+        match={selectedRequestMatch}
         messages={selectedRequest ? messages.filter((message) => message.requestId === selectedRequest.id) : []}
         messageText={messageText}
         chatFeedback={chatFeedback}
@@ -2739,8 +2757,7 @@ function InboxScreen({
 
 function MineScreen({
   profile,
-  hostedMatches,
-  myRequests,
+  profiles,
   requests,
   matches,
   userEmail,
@@ -2750,8 +2767,7 @@ function MineScreen({
   onOpenRequest
 }: {
   profile: TeamProfile;
-  hostedMatches: Match[];
-  myRequests: MatchRequest[];
+  profiles: TeamProfile[];
   requests: MatchRequest[];
   matches: Match[];
   userEmail: string | null;
@@ -2760,17 +2776,23 @@ function MineScreen({
   onOpenMatch: (id: string) => void;
   onOpenRequest: (id: string) => void;
 }) {
-  const approvedRequestMatches = myRequests
+  const allProfiles = profiles.some((teamProfile) => teamProfile.id === profile.id)
+    ? profiles
+    : [profile, ...profiles];
+  const ownedTeamIds = new Set(allProfiles.map((teamProfile) => teamProfile.id));
+  const ownedHostedMatches = matches.filter((match) => isMatchOwnedByProfiles(match, allProfiles));
+  const ownedRequests = requests.filter((request) => ownedTeamIds.has(request.fromTeamId));
+  const approvedRequestMatches = ownedRequests
     .filter((request) => request.status === "godkjent")
     .map((request) => matches.find((match) => match.id === request.matchId))
     .filter((match): match is Match => Boolean(match))
-    .filter((match) => !hostedMatches.some((hostedMatch) => hostedMatch.id === match.id));
-  const myMatches = [...hostedMatches, ...approvedRequestMatches];
+    .filter((match) => !ownedHostedMatches.some((hostedMatch) => hostedMatch.id === match.id));
+  const myMatches = [...ownedHostedMatches, ...approvedRequestMatches];
   const agreedMyMatches = myMatches.filter((match) => match.status === "avtalt").length;
-  const activeHostedMatches = hostedMatches
+  const activeHostedMatches = ownedHostedMatches
     .filter((match) => match.status !== "avtalt")
     .sort((a, b) => getMatchDateSortValue(a) - getMatchDateSortValue(b));
-  const activeMyRequests = myRequests.filter((request) => {
+  const activeMyRequests = ownedRequests.filter((request) => {
     const match = matches.find((candidate) => candidate.id === request.matchId);
     return request.status === "venter" && match?.status !== "avtalt";
   });
@@ -3567,6 +3589,26 @@ function formatProfileTeamLine(profile: TeamProfile) {
   return ageGroup && !team.toLowerCase().includes(ageGroup.toLowerCase())
     ? `${team} · ${ageGroup}`
     : team;
+}
+
+function normalizeOwnerValue(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function getProfileForMatch(match: Match, profiles: TeamProfile[]) {
+  return (
+    profiles.find((profile) => profile.id === match.hostTeamId) ??
+    profiles.find(
+      (profile) =>
+        normalizeOwnerValue(profile.contactName) === normalizeOwnerValue(match.contactName) &&
+        getAgeGroupDisplay(profile.ageGroup) === getAgeGroupDisplay(match.ageGroup)
+    ) ??
+    null
+  );
+}
+
+function isMatchOwnedByProfiles(match: Match, profiles: TeamProfile[]) {
+  return Boolean(getProfileForMatch(match, profiles));
 }
 
 function getMatchDisplayTitle(match: Match, approvedRequest?: MatchRequest) {
