@@ -356,7 +356,29 @@ const getAgeGroupPrefix = (value: string) => {
   return prefix === "G" || prefix === "J" ? prefix : "";
 };
 
-const getAgeGroupNumber = (value: string) => value.replace(/\D/g, "").slice(0, 2);
+const getAgeGroupNumber = (value: string) => {
+  const digits = value.replace(/\D/g, "");
+  return digits.length >= 4 ? digits.slice(0, 4) : "";
+};
+
+const getAgeGroupInputNumber = (value: string) => value.replace(/\D/g, "").slice(0, 4);
+
+const getAgeGroupDisplay = (value: string) => {
+  const prefix = getAgeGroupPrefix(value);
+  const digits = value.replace(/\D/g, "");
+  const birthYear = digits.length >= 4 ? Number(digits.slice(0, 4)) : null;
+
+  if (!prefix) {
+    return value;
+  }
+
+  if (birthYear) {
+    const age = new Date().getFullYear() - birthYear;
+    return age > 0 ? `${prefix}${age}` : value;
+  }
+
+  return digits ? `${prefix}${digits}` : value;
+};
 
 const formatAgeGroup = (value: string) => `${getAgeGroupPrefix(value)}${getAgeGroupNumber(value)}`;
 
@@ -366,6 +388,7 @@ export default function App() {
   const [requests, setRequests] = useState<MatchRequest[]>(isSupabaseConfigured ? [] : initialRequests);
   const [messages, setMessages] = useState<ChatMessage[]>(isSupabaseConfigured ? [] : initialMessages);
   const [currentProfile, setCurrentProfile] = useState<TeamProfile>(fallbackProfile);
+  const [teamProfiles, setTeamProfiles] = useState<TeamProfile[]>(isSupabaseConfigured ? [] : [fallbackProfile]);
   const [profileReady, setProfileReady] = useState(!isSupabaseConfigured);
   const [hasTeamProfile, setHasTeamProfile] = useState(!isSupabaseConfigured);
   const [appDataReady, setAppDataReady] = useState(!isSupabaseConfigured);
@@ -424,6 +447,12 @@ export default function App() {
 
   const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
   const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
+  const selectTeamProfile = (profile: TeamProfile) => {
+    setCurrentProfile(profile);
+    setForm(createEmptyForm(profile));
+    setSeenIncomingCount(0);
+    setSeenApprovedCount(0);
+  };
 
   const saveSeenNotificationCounts = (incoming: number, approved: number) => {
     if (typeof window === "undefined" || !currentProfile.id) {
@@ -511,6 +540,7 @@ export default function App() {
       setProfileReady(!session?.user);
       setHasTeamProfile(false);
       setAppDataReady(!session?.user);
+      setTeamProfiles([]);
       setAuthReady(true);
       setSeenIncomingCount(0);
       setSeenApprovedCount(0);
@@ -533,8 +563,7 @@ export default function App() {
         .from("teams")
         .select("id, sport, club, team, age_group, level, contact_name, users(email, phone)")
         .eq("user_id", authUserId)
-        .limit(1)
-        .maybeSingle();
+        .order("created_at", { ascending: true });
 
       if (ignore) {
         return;
@@ -545,12 +574,16 @@ export default function App() {
         return;
       }
 
-      if (data) {
-        const profile = mapDatabaseTeam(data as DatabaseTeamRow);
-        setCurrentProfile(profile);
-        setForm(createEmptyForm(profile));
+      const profiles = ((data ?? []) as DatabaseTeamRow[]).map(mapDatabaseTeam);
+
+      if (profiles.length > 0) {
+        const nextProfile = profiles.find((profile) => profile.id === currentProfile.id) ?? profiles[0];
+        setTeamProfiles(profiles);
+        setCurrentProfile(nextProfile);
+        setForm(createEmptyForm(nextProfile));
         setHasTeamProfile(true);
       } else {
+        setTeamProfiles([]);
         setHasTeamProfile(false);
       }
 
@@ -651,7 +684,7 @@ export default function App() {
 
     const cleanForm = {
       sport: form.sport,
-      title: `${formatAgeGroup(form.ageGroup) || currentProfile.ageGroup} søker treningskamp`,
+      title: `${getAgeGroupDisplay(formatAgeGroup(form.ageGroup)) || getAgeGroupDisplay(currentProfile.ageGroup)} søker treningskamp`,
       ageGroup: formatAgeGroup(form.ageGroup),
       level: formatLevel(form.level),
       date: form.date.trim(),
@@ -670,7 +703,7 @@ export default function App() {
       !cleanForm.time ||
       !cleanForm.place
     ) {
-      setCreateFeedback("Fyll inn alder, nivå, dato, tid og bane/sted før du publiserer kampen.");
+      setCreateFeedback("Fyll inn årskull, nivå, dato, tid og bane/sted før du publiserer kampen.");
       return;
     }
 
@@ -766,7 +799,7 @@ export default function App() {
 
     const cleanForm = {
       sport: editForm.sport,
-      title: `${formatAgeGroup(editForm.ageGroup) || editingMatch.ageGroup} søker treningskamp`,
+      title: `${getAgeGroupDisplay(formatAgeGroup(editForm.ageGroup)) || getAgeGroupDisplay(editingMatch.ageGroup)} søker treningskamp`,
       ageGroup: formatAgeGroup(editForm.ageGroup),
       level: formatLevel(editForm.level),
       date: editForm.date.trim(),
@@ -785,7 +818,7 @@ export default function App() {
       !cleanForm.time ||
       !cleanForm.place
     ) {
-      setEditFeedback("Fyll inn alder, nivå, dato, tid og bane/sted før du lagrer.");
+      setEditFeedback("Fyll inn årskull, nivå, dato, tid og bane/sted før du lagrer.");
       return;
     }
 
@@ -1196,6 +1229,7 @@ export default function App() {
   const saveProfileChanges = async (profile: TeamProfile) => {
     if (!isSupabaseConfigured || !supabase || !authUserId) {
       setCurrentProfile(profile);
+      setTeamProfiles((current) => current.map((teamProfile) => (teamProfile.id === profile.id ? profile : teamProfile)));
       setForm(createEmptyForm(profile));
       setProfileEditVisible(false);
       return;
@@ -1231,6 +1265,9 @@ export default function App() {
 
     const updatedProfile = data ? mapDatabaseTeam(data as DatabaseTeamRow) : profile;
     setCurrentProfile(updatedProfile);
+    setTeamProfiles((current) =>
+      current.map((teamProfile) => (teamProfile.id === updatedProfile.id ? updatedProfile : teamProfile))
+    );
     setForm(createEmptyForm(updatedProfile));
     setMatches((current) =>
       current.map((match) =>
@@ -1253,6 +1290,138 @@ export default function App() {
       )
     );
     setProfileEditVisible(false);
+  };
+
+  const addTeamProfile = async (profile: Omit<TeamProfile, "id" | "contactName" | "phone" | "email">) => {
+    const newProfileBase = {
+      ...profile,
+      contactName: currentProfile.contactName,
+      phone: currentProfile.phone,
+      email: currentProfile.email
+    };
+
+    if (!isSupabaseConfigured || !supabase || !authUserId) {
+      const localProfile: TeamProfile = {
+        ...newProfileBase,
+        id: createLocalId()
+      };
+      setTeamProfiles((current) => [...current, localProfile]);
+      selectTeamProfile(localProfile);
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("teams")
+      .insert({
+        user_id: authUserId,
+        sport: profile.sport,
+        club: profile.team,
+        team: profile.team,
+        age_group: profile.ageGroup,
+        level: profile.level,
+        contact_name: currentProfile.contactName
+      })
+      .select("id, sport, club, team, age_group, level, contact_name, users(email, phone)")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    if (data) {
+      const newProfile = mapDatabaseTeam(data as DatabaseTeamRow);
+      setTeamProfiles((current) => [...current, newProfile]);
+      selectTeamProfile(newProfile);
+    }
+  };
+
+  const deleteTeamProfile = async (profile: TeamProfile) => {
+    if (teamProfiles.length <= 1) {
+      throw new Error("Du mÃ¥ ha minst ett lag i appen.");
+    }
+
+    const nextProfiles = teamProfiles.filter((teamProfile) => teamProfile.id !== profile.id);
+    const nextActiveProfile =
+      currentProfile.id === profile.id
+        ? nextProfiles[0]
+        : currentProfile;
+
+    if (!isSupabaseConfigured || !supabase) {
+      setTeamProfiles(nextProfiles);
+      selectTeamProfile(nextActiveProfile);
+      return;
+    }
+
+    const { error: rpcError } = await supabase.rpc("delete_own_team", {
+      team_id_to_delete: profile.id
+    });
+
+    if (!rpcError) {
+      setTeamProfiles(nextProfiles);
+      setMatches((current) => current.filter((match) => match.hostTeamId !== profile.id));
+      setRequests((current) => current.filter((request) => request.fromTeamId !== profile.id));
+      setMessages((current) =>
+        current.filter((message) =>
+          requests.some((request) => request.id === message.requestId && request.fromTeamId !== profile.id)
+        )
+      );
+      selectTeamProfile(nextActiveProfile);
+      return;
+    }
+
+    const hostedMatchIds = matches
+      .filter((match) => match.hostTeamId === profile.id && isUuid(match.id))
+      .map((match) => match.id);
+    const requestIds = requests
+      .filter(
+        (request) =>
+          request.fromTeamId === profile.id ||
+          hostedMatchIds.includes(request.matchId)
+      )
+      .map((request) => request.id)
+      .filter(isUuid);
+
+    if (requestIds.length > 0) {
+      const { error: chatDeleteError } = await supabase.from("chat_messages").delete().in("request_id", requestIds);
+      if (chatDeleteError) {
+        throw chatDeleteError;
+      }
+
+      const { error: requestDeleteError } = await supabase.from("match_requests").delete().in("id", requestIds);
+      if (requestDeleteError) {
+        throw requestDeleteError;
+      }
+    }
+
+    if (hostedMatchIds.length > 0) {
+      const { error: matchDeleteError } = await supabase.from("matches").delete().in("id", hostedMatchIds);
+      if (matchDeleteError) {
+        throw matchDeleteError;
+      }
+    }
+
+    const { error } = await supabase
+      .from("teams")
+      .delete()
+      .eq("id", profile.id)
+      .select("id")
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    setTeamProfiles(nextProfiles);
+    setMatches((current) => current.filter((match) => match.hostTeamId !== profile.id));
+    setRequests((current) =>
+      current.filter(
+        (request) =>
+          request.fromTeamId !== profile.id &&
+          !hostedMatchIds.includes(request.matchId)
+      )
+    );
+    setMessages((current) => current.filter((message) => !requestIds.includes(message.requestId)));
+    selectTeamProfile(nextActiveProfile);
   };
 
   const sendChatMessage = async () => {
@@ -1451,6 +1620,7 @@ export default function App() {
           setAuthUserId(null);
           setHasTeamProfile(false);
           setCurrentProfile(fallbackProfile);
+          setTeamProfiles([]);
           setProfileEditVisible(false);
           setSeenIncomingCount(0);
           setSeenApprovedCount(0);
@@ -1494,6 +1664,7 @@ export default function App() {
         email={userEmail}
         onProfileCreated={(profile) => {
           setCurrentProfile(profile);
+          setTeamProfiles([profile]);
           setForm(createEmptyForm(profile));
           setHasTeamProfile(true);
         }}
@@ -1519,6 +1690,13 @@ export default function App() {
         <Header
           title={getTabTitle(activeTab)}
           profile={currentProfile}
+          profiles={teamProfiles}
+          onSelectProfile={(profileId) => {
+            const profile = teamProfiles.find((teamProfile) => teamProfile.id === profileId);
+            if (profile) {
+              selectTeamProfile(profile);
+            }
+          }}
           showHomeLogo={activeTab === "home" && homeHeaderLogoVisible}
         />
         <View style={styles.content}>{renderContent()}</View>
@@ -1553,8 +1731,11 @@ export default function App() {
       <ProfileEditModal
         visible={profileEditVisible}
         profile={currentProfile}
+        profiles={teamProfiles}
         onClose={() => setProfileEditVisible(false)}
         onSave={saveProfileChanges}
+        onAddTeam={addTeamProfile}
+        onDeleteTeam={deleteTeamProfile}
       />
 
       <MatchDetailsModal
@@ -1597,10 +1778,14 @@ export default function App() {
 function Header({
   title,
   profile,
+  profiles,
+  onSelectProfile,
   showHomeLogo
 }: {
   title: string;
   profile: TeamProfile;
+  profiles: TeamProfile[];
+  onSelectProfile: (profileId: string) => void;
   showHomeLogo: boolean;
 }) {
   return (
@@ -1608,9 +1793,24 @@ function Header({
       {title ? (
         <Text style={styles.headerTitle}>{title}</Text>
       ) : (
-        <Text style={styles.headerProfileText}>
-          {profile.contactName} · {profile.team}
-        </Text>
+        <View style={styles.headerProfileWrap}>
+          <Text style={styles.headerProfileName}>{profile.contactName}</Text>
+          {profiles.length > 1 ? (
+            <Pressable
+              style={styles.headerTeamSwitch}
+              onPress={() => {
+                const currentIndex = profiles.findIndex((teamProfile) => teamProfile.id === profile.id);
+                const nextProfile = profiles[(currentIndex + 1) % profiles.length];
+                onSelectProfile(nextProfile.id);
+              }}
+            >
+              <Text style={styles.headerTeamSwitchText}>{formatProfileTeamLine(profile)}</Text>
+              <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+            </Pressable>
+          ) : (
+            <Text style={styles.headerProfileTeam}>{formatProfileTeamLine(profile)}</Text>
+          )}
+        </View>
       )}
       {showHomeLogo ? <PlayrLogo compact /> : null}
     </View>
@@ -1733,8 +1933,8 @@ function TeamProfileScreen({
       return;
     }
 
-    if (!contactName.trim() || !team.trim() || !ageGroup.trim()) {
-      setFeedback("Fyll inn trenernavn, lag og alder.");
+    if (!contactName.trim() || !team.trim() || !getAgeGroupPrefix(ageGroup) || !getAgeGroupNumber(ageGroup)) {
+      setFeedback("Fyll inn trenernavn, lag og årskull.");
       return;
     }
 
@@ -1763,7 +1963,7 @@ function TeamProfileScreen({
         sport,
         club: team.trim(),
         team: team.trim(),
-        age_group: ageGroup.trim(),
+        age_group: formatAgeGroup(ageGroup),
         level: "",
         contact_name: contactName.trim()
       })
@@ -1818,12 +2018,7 @@ function TeamProfileScreen({
               onChangeText={setTeam}
               placeholder="Eks: Lyn Akademi"
             />
-            <Input
-              label="Alder"
-              value={ageGroup}
-              onChangeText={setAgeGroup}
-              placeholder="Eks: G13"
-            />
+            <AgeGroupInput value={ageGroup} onChangeText={setAgeGroup} />
             <Input
               label="Telefon (valgfritt)"
               value={phone}
@@ -1849,21 +2044,32 @@ function TeamProfileScreen({
 function ProfileEditModal({
   visible,
   profile,
+  profiles,
   onClose,
-  onSave
+  onSave,
+  onAddTeam,
+  onDeleteTeam
 }: {
   visible: boolean;
   profile: TeamProfile;
+  profiles: TeamProfile[];
   onClose: () => void;
   onSave: (profile: TeamProfile) => Promise<void>;
+  onAddTeam: (profile: Omit<TeamProfile, "id" | "contactName" | "phone" | "email">) => Promise<void>;
+  onDeleteTeam: (profile: TeamProfile) => Promise<void>;
 }) {
   const [contactName, setContactName] = useState(profile.contactName);
   const [sport, setSport] = useState<Sport>(profile.sport);
   const [team, setTeam] = useState(profile.team);
   const [ageGroup, setAgeGroup] = useState(profile.ageGroup);
   const [phone, setPhone] = useState(profile.phone);
+  const [newTeamSport, setNewTeamSport] = useState<Sport>(profile.sport);
+  const [newTeam, setNewTeam] = useState("");
+  const [newAgeGroup, setNewAgeGroup] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [addingTeam, setAddingTeam] = useState(false);
+  const [deletingTeamId, setDeletingTeamId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!visible) {
@@ -1875,12 +2081,16 @@ function ProfileEditModal({
     setTeam(profile.team);
     setAgeGroup(profile.ageGroup);
     setPhone(profile.phone);
+    setNewTeamSport(profile.sport);
+    setNewTeam("");
+    setNewAgeGroup("");
+    setDeletingTeamId(null);
     setFeedback(null);
   }, [visible, profile]);
 
   const save = async () => {
-    if (!contactName.trim() || !team.trim() || !ageGroup.trim()) {
-      setFeedback("Fyll inn trenernavn, lag og alder.");
+    if (!contactName.trim() || !team.trim() || !getAgeGroupPrefix(ageGroup) || !getAgeGroupNumber(ageGroup)) {
+      setFeedback("Fyll inn trenernavn, lag og årskull.");
       return;
     }
 
@@ -1894,13 +2104,81 @@ function ProfileEditModal({
         sport,
         club: team.trim(),
         team: team.trim(),
-        ageGroup: ageGroup.trim(),
+        ageGroup: formatAgeGroup(ageGroup),
         phone: phone.trim()
       });
     } catch (error) {
       setFeedback(getReadableErrorMessage(error, "Profilen kunne ikke lagres."));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const addTeam = async () => {
+    if (!newTeam.trim() || !getAgeGroupPrefix(newAgeGroup) || !getAgeGroupNumber(newAgeGroup)) {
+      setFeedback("Fyll inn lag, G/J og årskull for ekstra lag.");
+      return;
+    }
+
+    setAddingTeam(true);
+    setFeedback(null);
+
+    try {
+      await onAddTeam({
+        sport: newTeamSport,
+        club: newTeam.trim(),
+        team: newTeam.trim(),
+        ageGroup: formatAgeGroup(newAgeGroup),
+        level: ""
+      });
+      setNewTeam("");
+      setNewAgeGroup("");
+    } catch (error) {
+      setFeedback(getReadableErrorMessage(error, "Laget kunne ikke legges til."));
+    } finally {
+      setAddingTeam(false);
+    }
+  };
+
+  const confirmDeleteTeam = (teamProfile: TeamProfile) => {
+    if (profiles.length <= 1) {
+      setFeedback("Du mÃ¥ ha minst ett lag i appen.");
+      return;
+    }
+
+    const deleteMessage = `${formatProfileTeamLine(teamProfile)} fjernes fra appen. Kamper og forespÃ¸rsler som hÃ¸rer til laget kan ogsÃ¥ bli fjernet.`;
+
+    if (typeof window !== "undefined" && typeof window.confirm === "function") {
+      if (window.confirm(`Slette lag?\n\n${deleteMessage}`)) {
+        deleteTeam(teamProfile);
+      }
+      return;
+    }
+
+    Alert.alert(
+      "Slette lag?",
+      deleteMessage,
+      [
+        { text: "Avbryt", style: "cancel" },
+        {
+          text: "Slett lag",
+          style: "destructive",
+          onPress: () => deleteTeam(teamProfile)
+        }
+      ]
+    );
+  };
+
+  const deleteTeam = async (teamProfile: TeamProfile) => {
+    setDeletingTeamId(teamProfile.id);
+    setFeedback(null);
+
+    try {
+      await onDeleteTeam(teamProfile);
+    } catch (error) {
+      setFeedback(getReadableErrorMessage(error, "Laget kunne ikke slettes."));
+    } finally {
+      setDeletingTeamId(null);
     }
   };
 
@@ -1940,12 +2218,7 @@ function ProfileEditModal({
               onChangeText={setTeam}
               placeholder="Eks: Glassverket IF"
             />
-            <Input
-              label="Alder"
-              value={ageGroup}
-              onChangeText={setAgeGroup}
-              placeholder="Eks: G13"
-            />
+            <AgeGroupInput value={ageGroup} onChangeText={setAgeGroup} />
             <Input
               label="Telefon (valgfritt)"
               value={phone}
@@ -1953,6 +2226,59 @@ function ProfileEditModal({
               placeholder="Eks: 900 00 000"
             />
             <ReadonlyField label="E-post" value={profile.email} />
+
+            <View style={styles.profileTeamsBox}>
+              <Text style={styles.sectionTitle}>Lag i appen</Text>
+              {profiles.map((teamProfile) => (
+                <View key={teamProfile.id} style={styles.profileTeamRow}>
+                  <Text style={styles.profileTeamLine}>
+                    {formatProfileTeamLine(teamProfile)}
+                  </Text>
+                  <Pressable
+                    style={[
+                      styles.profileTeamDeleteButton,
+                      (profiles.length <= 1 || deletingTeamId === teamProfile.id) && styles.disabledButton
+                    ]}
+                    disabled={profiles.length <= 1 || deletingTeamId === teamProfile.id}
+                    onPress={() => confirmDeleteTeam(teamProfile)}
+                  >
+                    <Ionicons name="trash-outline" size={17} color={colors.red} />
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+
+            <View style={styles.profileTeamsBox}>
+              <Text style={styles.sectionTitle}>Legg til ekstra lag</Text>
+              <Text style={styles.inputLabel}>Idrett</Text>
+              <View style={styles.pickerField}>
+                <Picker
+                  selectedValue={newTeamSport}
+                  onValueChange={(value: Sport) => setNewTeamSport(value)}
+                  style={styles.formPicker}
+                >
+                  <Picker.Item label="Fotball" value="Fotball" />
+                  <Picker.Item label="Håndball" value="Handball" />
+                </Picker>
+              </View>
+              <Input
+                label="Lag"
+                value={newTeam}
+                onChangeText={setNewTeam}
+                placeholder="Eks: Glassverket G12"
+              />
+              <AgeGroupInput value={newAgeGroup} onChangeText={setNewAgeGroup} />
+              <Pressable
+                style={[styles.secondaryButtonFull, addingTeam && styles.disabledButton]}
+                disabled={addingTeam}
+                onPress={addTeam}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={colors.greenDark} />
+                <Text style={styles.secondaryButtonText}>
+                  {addingTeam ? "Legger til..." : "Legg til lag"}
+                </Text>
+              </Pressable>
+            </View>
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
@@ -2009,7 +2335,7 @@ function HomeScreen({
     (match) =>
       match.status === "ledig" &&
       match.sport === profile.sport &&
-      match.ageGroup === profile.ageGroup &&
+      getAgeGroupDisplay(match.ageGroup) === getAgeGroupDisplay(profile.ageGroup) &&
       match.hostTeamId !== profile.id
   );
   const [activeMatchIndex, setActiveMatchIndex] = useState(0);
@@ -2175,7 +2501,7 @@ function MatchesScreen({
 
   const ageOptions = useMemo(
     () =>
-      Array.from(new Set(matches.map((match) => match.ageGroup).filter(Boolean))).sort((a, b) =>
+      Array.from(new Set(matches.map((match) => getAgeGroupDisplay(match.ageGroup)).filter(Boolean))).sort((a, b) =>
         a.localeCompare(b, "no-NO", { numeric: true })
       ),
     [matches]
@@ -2183,12 +2509,12 @@ function MatchesScreen({
   const filtered = matches
     .filter((match) => {
       const sportMatches = sportFilter === "Alle" || match.sport === sportFilter;
-    const ageMatches = ageFilter === "Alle" || match.ageGroup === ageFilter;
+    const ageMatches = ageFilter === "Alle" || getAgeGroupDisplay(match.ageGroup) === ageFilter;
       const statusMatches = !hideAgreed || match.status !== "avtalt";
       const search = searchText.trim().toLowerCase();
       const searchMatches =
         !search ||
-        [match.title, match.hostClub, match.hostTeam, match.place, match.city, match.ageGroup, match.level]
+        [match.title, match.hostClub, match.hostTeam, match.place, match.city, getAgeGroupDisplay(match.ageGroup), match.level]
           .join(" ")
           .toLowerCase()
           .includes(search);
@@ -2197,7 +2523,7 @@ function MatchesScreen({
     .sort((a, b) => {
       const statusA = a.status === "avtalt" ? 1 : 0;
       const statusB = b.status === "avtalt" ? 1 : 0;
-      return statusA - statusB || a.date.localeCompare(b.date) || a.time.localeCompare(b.time);
+      return statusA - statusB || getMatchDateSortValue(a) - getMatchDateSortValue(b);
     });
 
   return (
@@ -2220,7 +2546,7 @@ function MatchesScreen({
             onValueChange={setAgeFilter}
             style={styles.compactPicker}
           >
-            <Picker.Item label="Alle aldre" value="Alle" />
+            <Picker.Item label="Alle årskull" value="Alle" />
             {ageOptions.map((age) => (
               <Picker.Item key={age} label={age} value={age} />
             ))}
@@ -2427,18 +2753,25 @@ function MineScreen({
     .filter((match) => !hostedMatches.some((hostedMatch) => hostedMatch.id === match.id));
   const myMatches = [...hostedMatches, ...approvedRequestMatches];
   const agreedMyMatches = myMatches.filter((match) => match.status === "avtalt").length;
-  const activeHostedMatches = hostedMatches.filter((match) => match.status !== "avtalt");
+  const activeHostedMatches = hostedMatches
+    .filter((match) => match.status !== "avtalt")
+    .sort((a, b) => getMatchDateSortValue(a) - getMatchDateSortValue(b));
   const activeMyRequests = myRequests.filter((request) => {
     const match = matches.find((candidate) => candidate.id === request.matchId);
     return request.status === "venter" && match?.status !== "avtalt";
   });
   const sortedMyRequests = [...activeMyRequests].sort(
-    (a, b) => getRequestSortValue(a.status) - getRequestSortValue(b.status)
+    (a, b) =>
+      getRequestSortValue(a.status) - getRequestSortValue(b.status) ||
+      getRequestMatchDateSortValue(a, matches) - getRequestMatchDateSortValue(b, matches)
   );
   const activeHostedIds = new Set(activeHostedMatches.map((match) => match.id));
-  const activeIncomingRequests = requests.filter(
-    (request) => request.status === "venter" && activeHostedIds.has(request.matchId)
-  );
+  const activeIncomingRequests = requests
+    .filter((request) => request.status === "venter" && activeHostedIds.has(request.matchId))
+    .sort(
+      (a, b) =>
+        getRequestMatchDateSortValue(a, matches) - getRequestMatchDateSortValue(b, matches)
+    );
   const pendingRequests = activeMyRequests.length + activeIncomingRequests.length;
 
   return (
@@ -2447,7 +2780,7 @@ function MineScreen({
         <Text style={styles.sectionLabel}>Innlogget konto</Text>
         <Text style={styles.accountEmail}>{userEmail ?? "Ukjent bruker"}</Text>
         <Text style={styles.accountProfileText}>
-          {profile.contactName} · {formatSport(profile.sport)} · {profile.team} · {profile.ageGroup}
+          {profile.contactName} · {formatSport(profile.sport)} · {profile.team} · {getAgeGroupDisplay(profile.ageGroup)}
         </Text>
         <View style={styles.accountActions}>
           <Pressable style={styles.editProfileButton} onPress={onEditProfile}>
@@ -2562,7 +2895,7 @@ function MatchCard({
       </View>
 
       <Text style={styles.cardCompactMeta} numberOfLines={1}>
-        {formatSport(match.sport)} · {match.ageGroup} · {match.level} · {match.date} {match.time} · {match.place}
+        {formatSport(match.sport)} · {getAgeGroupDisplay(match.ageGroup)} · {match.level} · {match.date} {match.time} · {match.place}
       </Text>
     </Pressable>
   );
@@ -2785,7 +3118,7 @@ function MatchDetailsModal({
 
           <Text style={styles.sectionTitle}>Kampinfo</Text>
           <DetailRow label="Idrett" value={formatSport(match.sport)} />
-          <DetailRow label="Alder" value={match.ageGroup} />
+          <DetailRow label="Alder" value={getAgeGroupDisplay(match.ageGroup)} />
           <DetailRow label="Nivå" value={match.level} />
           <DetailRow label="Dato" value={`${match.date} ${match.time}`} />
           <DetailRow label="Bane/sted" value={match.place} />
@@ -3090,6 +3423,9 @@ function LevelInput({
           maxLength={1}
         />
       </View>
+      <Text style={styles.levelHelpText}>
+        Hvilket nivå er laget ditt? 1=Øvd - 2=Middels - 3=Mindre Øvd
+      </Text>
     </View>
   );
 }
@@ -3102,12 +3438,12 @@ function AgeGroupInput({
   onChangeText: (text: string) => void;
 }) {
   const prefix = getAgeGroupPrefix(value);
-  const age = getAgeGroupNumber(value);
-  const updateValue = (nextPrefix: string, nextAge: string) => onChangeText(`${nextPrefix}${nextAge}`);
+  const birthYear = getAgeGroupInputNumber(value);
+  const updateValue = (nextPrefix: string, nextBirthYear: string) => onChangeText(`${nextPrefix}${nextBirthYear}`);
 
   return (
     <View>
-      <Text style={styles.inputLabel}>Alder</Text>
+      <Text style={styles.inputLabel}>Årskull</Text>
       <View style={styles.ageGroupRow}>
         <View style={styles.ageGroupToggle}>
           {(["G", "J"] as const).map((option) => {
@@ -3116,7 +3452,7 @@ function AgeGroupInput({
               <Pressable
                 key={option}
                 style={[styles.ageGroupOption, selected && styles.ageGroupOptionSelected]}
-                onPress={() => updateValue(option, age)}
+                onPress={() => updateValue(option, birthYear)}
               >
                 <Text style={[styles.ageGroupOptionText, selected && styles.ageGroupOptionTextSelected]}>
                   {option}
@@ -3127,12 +3463,12 @@ function AgeGroupInput({
         </View>
         <TextInput
           style={styles.ageGroupInput}
-          value={age}
-          onChangeText={(text) => updateValue(prefix, text.replace(/\D/g, "").slice(0, 2))}
-          placeholder="13"
+          value={birthYear}
+          onChangeText={(text) => updateValue(prefix, text.replace(/\D/g, "").slice(0, 4))}
+          placeholder="Eks. 2014"
           placeholderTextColor={colors.muted}
           keyboardType="number-pad"
-          maxLength={2}
+          maxLength={4}
         />
       </View>
     </View>
@@ -3209,6 +3545,14 @@ function formatTeamName(club: string, team: string) {
   const cleanTeam = team.trim();
 
   return cleanTeam || cleanClub;
+}
+
+function formatProfileTeamLine(profile: TeamProfile) {
+  const team = profile.team.trim();
+  const ageGroup = getAgeGroupDisplay(profile.ageGroup).trim();
+  return ageGroup && !team.toLowerCase().includes(ageGroup.toLowerCase())
+    ? `${team} · ${ageGroup}`
+    : team;
 }
 
 function getMatchDisplayTitle(match: Match, approvedRequest?: MatchRequest) {
@@ -3381,6 +3725,23 @@ function isPastDatabaseDate(value: string) {
 function formatDatabaseDateForDisplay(value: string) {
   const [year, month, day] = value.split("-");
   return `${day}.${month}.${year}`;
+}
+
+function getMatchDateSortValue(match: Match) {
+  const databaseDate = parseDateForDatabase(match.date);
+  const databaseTime = parseTimeForDatabase(match.time) ?? "00:00:00";
+
+  if (!databaseDate) {
+    return Number.MAX_SAFE_INTEGER;
+  }
+
+  const timestamp = new Date(`${databaseDate}T${databaseTime}`).getTime();
+  return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
+}
+
+function getRequestMatchDateSortValue(request: MatchRequest, matches: Match[]) {
+  const match = matches.find((candidate) => candidate.id === request.matchId);
+  return match ? getMatchDateSortValue(match) : Number.MAX_SAFE_INTEGER;
 }
 
 function parseTimeForDatabase(value: string) {
@@ -3560,6 +3921,34 @@ const styles = StyleSheet.create({
     gap: 14,
     marginTop: 28
   },
+  profileTeamsBox: {
+    gap: 12,
+    marginTop: 4
+  },
+  profileTeamRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 10
+  },
+  profileTeamLine: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: colors.greenDark,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "800",
+    padding: 12
+  },
+  profileTeamDeleteButton: {
+    alignItems: "center",
+    backgroundColor: colors.redSoft,
+    borderRadius: 8,
+    height: 44,
+    justifyContent: "center",
+    width: 44
+  },
   profileSetupContent: {
     flexGrow: 1,
     justifyContent: "center",
@@ -3597,6 +3986,37 @@ const styles = StyleSheet.create({
     left: 22,
     right: 22,
     textAlign: "center"
+  },
+  headerProfileWrap: {
+    alignItems: "center",
+    left: 22,
+    position: "absolute",
+    right: 22,
+    top: 8
+  },
+  headerProfileName: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 3
+  },
+  headerProfileTeam: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  headerTeamSwitch: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 4,
+    justifyContent: "center",
+    maxWidth: 260,
+    paddingVertical: 2
+  },
+  headerTeamSwitchText: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontWeight: "900"
   },
   content: {
     flex: 1
@@ -4301,6 +4721,13 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 16,
     minHeight: 50
+  },
+  levelHelpText: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "700",
+    lineHeight: 14,
+    marginTop: 4
   },
   ageGroupRow: {
     flexDirection: "row",
