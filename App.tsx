@@ -382,6 +382,22 @@ const getAgeGroupDisplay = (value: string) => {
 
 const formatAgeGroup = (value: string) => `${getAgeGroupPrefix(value)}${getAgeGroupNumber(value)}`;
 
+const getAgeGroupFormValue = (value: string) => {
+  const prefix = getAgeGroupPrefix(value);
+  const digits = value.replace(/\D/g, "");
+
+  if (!prefix || !digits) {
+    return "";
+  }
+
+  if (digits.length >= 4) {
+    return `${prefix}${digits.slice(0, 4)}`;
+  }
+
+  const birthYear = new Date().getFullYear() - Number(digits);
+  return birthYear > 0 ? `${prefix}${birthYear}` : "";
+};
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [matches, setMatches] = useState<Match[]>(isSupabaseConfigured ? [] : initialMatches);
@@ -448,7 +464,7 @@ export default function App() {
   const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
   const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
   const openCreateMatch = () => {
-    setForm({ ...createEmptyForm(currentProfile), ageGroup: "" });
+    setForm({ ...createEmptyForm(currentProfile), ageGroup: getAgeGroupFormValue(currentProfile.ageGroup) });
     setCreateFeedback(null);
     setCreateVisible(true);
   };
