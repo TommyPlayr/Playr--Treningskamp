@@ -475,63 +475,50 @@ export default function App() {
     setSeenApprovedCount(0);
   };
 
-  const saveSeenNotificationCounts = (incoming: number, approved: number) => {
-    if (typeof window === "undefined" || !currentProfile.id) {
-      return;
-    }
-
-    window.localStorage.setItem(
-      `playr-seen-notification-counts-${currentProfile.id}`,
-      JSON.stringify({ incoming, approved })
-    );
-  };
-
   useEffect(() => {
     if (!appDataReady || !currentProfile.id || typeof window === "undefined") {
       return;
     }
 
-    const key = `playr-seen-notification-counts-${currentProfile.id}`;
     const shouldClear = new URLSearchParams(window.location.search).get("clearNotifications") === "1";
-    const saved = window.localStorage.getItem(key);
+    const saved = shouldClear ? null : readSeenNotificationCounts(currentProfile.id);
+    const nextIncoming = saved ? Math.min(saved.incoming, pendingIncomingCount) : pendingIncomingCount;
+    const nextApproved = saved ? Math.min(saved.approved, approvedMyRequestsCount) : approvedMyRequestsCount;
 
-    if (shouldClear || !saved) {
-      setSeenIncomingCount(pendingIncomingCount);
-      setSeenApprovedCount(approvedMyRequestsCount);
-      window.localStorage.setItem(
-        key,
-        JSON.stringify({ incoming: pendingIncomingCount, approved: approvedMyRequestsCount })
-      );
+    setSeenIncomingCount(nextIncoming);
+    setSeenApprovedCount(nextApproved);
+    saveSeenNotificationCounts(currentProfile.id, nextIncoming, nextApproved);
+  }, [appDataReady, currentProfile.id, pendingIncomingCount, approvedMyRequestsCount]);
+
+  useEffect(() => {
+    if (!appDataReady || !currentProfile.id) {
       return;
     }
 
-    try {
-      const parsed = JSON.parse(saved);
-      setSeenIncomingCount(Number(parsed.incoming) || 0);
-      setSeenApprovedCount(Number(parsed.approved) || 0);
-    } catch {
+    if (activeTab === "mine" && seenIncomingCount !== pendingIncomingCount) {
       setSeenIncomingCount(pendingIncomingCount);
-      setSeenApprovedCount(approvedMyRequestsCount);
-      window.localStorage.setItem(
-        key,
-        JSON.stringify({ incoming: pendingIncomingCount, approved: approvedMyRequestsCount })
-      );
+      saveSeenNotificationCounts(currentProfile.id, pendingIncomingCount, seenApprovedCount);
     }
-  }, [appDataReady, currentProfile.id]);
+
+    if (activeTab === "inbox" && seenApprovedCount !== approvedMyRequestsCount) {
+      setSeenApprovedCount(approvedMyRequestsCount);
+      saveSeenNotificationCounts(currentProfile.id, seenIncomingCount, approvedMyRequestsCount);
+    }
+  }, [
+    activeTab,
+    appDataReady,
+    currentProfile.id,
+    pendingIncomingCount,
+    approvedMyRequestsCount,
+    seenIncomingCount,
+    seenApprovedCount
+  ]);
 
   useEffect(() => {
-    if (activeTab === "mine") {
-      setSeenIncomingCount(pendingIncomingCount);
-      saveSeenNotificationCounts(pendingIncomingCount, seenApprovedCount);
+    if (!currentProfile.id) {
+      return;
     }
 
-    if (activeTab === "inbox") {
-      setSeenApprovedCount(approvedMyRequestsCount);
-      saveSeenNotificationCounts(seenIncomingCount, approvedMyRequestsCount);
-    }
-  }, [activeTab, pendingIncomingCount, approvedMyRequestsCount]);
-
-  useEffect(() => {
     const nextIncoming = Math.min(seenIncomingCount, pendingIncomingCount);
     const nextApproved = Math.min(seenApprovedCount, approvedMyRequestsCount);
 
@@ -542,7 +529,11 @@ export default function App() {
     if (nextApproved !== seenApprovedCount) {
       setSeenApprovedCount(nextApproved);
     }
-  }, [pendingIncomingCount, approvedMyRequestsCount, seenIncomingCount, seenApprovedCount]);
+
+    if (nextIncoming !== seenIncomingCount || nextApproved !== seenApprovedCount) {
+      saveSeenNotificationCounts(currentProfile.id, nextIncoming, nextApproved);
+    }
+  }, [currentProfile.id, pendingIncomingCount, approvedMyRequestsCount, seenIncomingCount, seenApprovedCount]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase) {
@@ -1593,10 +1584,12 @@ export default function App() {
           approvedMyRequestsCount={visibleApprovedNotificationCount}
           onOpenInbox={() => {
             setSeenIncomingCount(pendingIncomingCount);
+            saveSeenNotificationCounts(currentProfile.id, pendingIncomingCount, seenApprovedCount);
             setActiveTab("mine");
           }}
           onOpenMine={() => {
             setSeenApprovedCount(approvedMyRequestsCount);
+            saveSeenNotificationCounts(currentProfile.id, seenIncomingCount, approvedMyRequestsCount);
             setActiveTab("inbox");
           }}
         />
