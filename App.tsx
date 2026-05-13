@@ -344,6 +344,22 @@ const createFormFromMatch = (match: Match) => ({
   comment: match.comment
 });
 
+const getLevelNumber = (value: string) => {
+  const level = value.match(/[1-3]/g)?.at(-1) ?? "";
+  return level;
+};
+
+const formatLevel = (value: string) => `Nivå ${getLevelNumber(value)}`;
+
+const getAgeGroupPrefix = (value: string) => {
+  const prefix = value.trim().charAt(0).toUpperCase();
+  return prefix === "G" || prefix === "J" ? prefix : "";
+};
+
+const getAgeGroupNumber = (value: string) => value.replace(/\D/g, "").slice(0, 2);
+
+const formatAgeGroup = (value: string) => `${getAgeGroupPrefix(value)}${getAgeGroupNumber(value)}`;
+
 export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [matches, setMatches] = useState<Match[]>(isSupabaseConfigured ? [] : initialMatches);
@@ -635,9 +651,9 @@ export default function App() {
 
     const cleanForm = {
       sport: form.sport,
-      title: `${form.ageGroup.trim() || currentProfile.ageGroup} søker treningskamp`,
-      ageGroup: form.ageGroup.trim(),
-      level: form.level.trim(),
+      title: `${formatAgeGroup(form.ageGroup) || currentProfile.ageGroup} søker treningskamp`,
+      ageGroup: formatAgeGroup(form.ageGroup),
+      level: formatLevel(form.level),
       date: form.date.trim(),
       time: form.time.trim(),
       place: form.place.trim(),
@@ -647,8 +663,9 @@ export default function App() {
     };
 
     if (
-      !cleanForm.ageGroup ||
-      !cleanForm.level ||
+      !getAgeGroupPrefix(form.ageGroup) ||
+      !getAgeGroupNumber(form.ageGroup) ||
+      !getLevelNumber(form.level) ||
       !cleanForm.date ||
       !cleanForm.time ||
       !cleanForm.place
@@ -749,9 +766,9 @@ export default function App() {
 
     const cleanForm = {
       sport: editForm.sport,
-      title: `${editForm.ageGroup.trim() || editingMatch.ageGroup} søker treningskamp`,
-      ageGroup: editForm.ageGroup.trim(),
-      level: editForm.level.trim(),
+      title: `${formatAgeGroup(editForm.ageGroup) || editingMatch.ageGroup} søker treningskamp`,
+      ageGroup: formatAgeGroup(editForm.ageGroup),
+      level: formatLevel(editForm.level),
       date: editForm.date.trim(),
       time: editForm.time.trim(),
       place: editForm.place.trim(),
@@ -761,8 +778,9 @@ export default function App() {
     };
 
     if (
-      !cleanForm.ageGroup ||
-      !cleanForm.level ||
+      !getAgeGroupPrefix(editForm.ageGroup) ||
+      !getAgeGroupNumber(editForm.ageGroup) ||
+      !getLevelNumber(editForm.level) ||
       !cleanForm.date ||
       !cleanForm.time ||
       !cleanForm.place
@@ -1886,7 +1904,7 @@ function ProfileEditModal({
   };
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={visible} animationType="none" presentationStyle="pageSheet">
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -2569,7 +2587,7 @@ function CreateMatchModal({
   onSubmit: () => void;
 }) {
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet">
+    <Modal visible={visible} animationType="none" presentationStyle="pageSheet">
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -2597,8 +2615,8 @@ function CreateMatchModal({
               </Picker>
             </View>
 
-            <Input label="Alder" value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} placeholder="Eks: G13/J13" />
-            <Input label="Nivå" value={form.level} onChangeText={(level) => onChange({ ...form, level })} placeholder="Eks: Nivå 1, 2 eller 3" />
+            <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
+            <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
             <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026" />
             <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00" />
             <Input label="Bane/sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Marienlyst stadion" />
@@ -2675,8 +2693,8 @@ function EditMatchModal({
                 <Picker.Item label="Håndball" value="Handball" />
               </Picker>
             </View>
-            <Input label="Alder" value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} placeholder="Eks: G13/J13" />
-            <Input label="Nivå" value={form.level} onChangeText={(level) => onChange({ ...form, level })} placeholder="Eks: Nivå 1, 2 eller 3" />
+            <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
+            <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
             <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026" />
             <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00" />
             <Input label="Bane/sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Marienlyst stadion" />
@@ -2753,8 +2771,7 @@ function MatchDetailsModal({
   return (
     <Modal visible animationType="none" presentationStyle="pageSheet">
       <SafeAreaView style={styles.modalSafe}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>{match.title}</Text>
+        <View style={styles.matchModalHeader}>
           <Pressable onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
@@ -3043,6 +3060,70 @@ function Input({
         placeholderTextColor={colors.muted}
         multiline={multiline}
       />
+    </View>
+  );
+}
+
+function LevelInput({
+  value,
+  onChangeText
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+}) {
+  return (
+    <View>
+      <Text style={styles.inputLabel}>Nivå</Text>
+      <View style={styles.levelInputRow}>
+        <Text style={styles.levelInputPrefix}>Nivå</Text>
+        <TextInput
+          style={styles.levelInput}
+          value={getLevelNumber(value)}
+          onChangeText={(text) => onChangeText(getLevelNumber(text))}
+          keyboardType="number-pad"
+          maxLength={1}
+        />
+      </View>
+    </View>
+  );
+}
+
+function AgeGroupInput({
+  value,
+  onChangeText
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+}) {
+  const prefix = getAgeGroupPrefix(value);
+  const age = getAgeGroupNumber(value);
+  const updateValue = (nextPrefix: string, nextAge: string) => onChangeText(`${nextPrefix}${nextAge}`);
+
+  return (
+    <View>
+      <Text style={styles.inputLabel}>Alder</Text>
+      <View style={styles.ageGroupRow}>
+        <View style={styles.ageGroupPickerWrap}>
+          <Picker
+            selectedValue={prefix}
+            onValueChange={(nextPrefix: string) => updateValue(nextPrefix, age)}
+            style={styles.ageGroupPicker}
+          >
+            <Picker.Item label="Velg" value="" />
+            <Picker.Item label="G" value="G" />
+            <Picker.Item label="J" value="J" />
+          </Picker>
+        </View>
+        <TextInput
+          style={styles.ageGroupInput}
+          value={age}
+          onChangeText={(text) => updateValue(prefix, text.replace(/\D/g, "").slice(0, 2))}
+          placeholder="13"
+          placeholderTextColor={colors.muted}
+          keyboardType="number-pad"
+          maxLength={2}
+        />
+      </View>
     </View>
   );
 }
@@ -4154,6 +4235,13 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: "900"
   },
+  matchModalHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    paddingHorizontal: 18,
+    paddingTop: 10
+  },
   closeButton: {
     alignItems: "center",
     height: 44,
@@ -4177,6 +4265,56 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     color: colors.text,
+    fontSize: 16,
+    minHeight: 50,
+    paddingHorizontal: 14
+  },
+  levelInputRow: {
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 50,
+    paddingHorizontal: 14
+  },
+  levelInputPrefix: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "700",
+    marginRight: 8
+  },
+  levelInput: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 16,
+    minHeight: 50
+  },
+  ageGroupRow: {
+    flexDirection: "row",
+    gap: 10
+  },
+  ageGroupPickerWrap: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 50,
+    overflow: "hidden"
+  },
+  ageGroupPicker: {
+    minHeight: 50
+  },
+  ageGroupInput: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: colors.text,
+    flex: 1,
     fontSize: 16,
     minHeight: 50,
     paddingHorizontal: 14
