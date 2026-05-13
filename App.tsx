@@ -2609,6 +2609,7 @@ function CreateMatchModal({
               <Picker
                 selectedValue={form.sport}
                 onValueChange={(sport: Sport) => onChange({ ...form, sport })}
+                style={styles.formPicker}
               >
                 <Picker.Item label="Fotball" value="Fotball" />
                 <Picker.Item label="Håndball" value="Handball" />
@@ -2688,6 +2689,7 @@ function EditMatchModal({
               <Picker
                 selectedValue={form.sport}
                 onValueChange={(sport: Sport) => onChange({ ...form, sport })}
+                style={styles.formPicker}
               >
                 <Picker.Item label="Fotball" value="Fotball" />
                 <Picker.Item label="Håndball" value="Handball" />
@@ -4293,19 +4295,24 @@ const styles = StyleSheet.create({
   },
   ageGroupRow: {
     flexDirection: "row",
-    gap: 10
+    gap: 8
   },
   ageGroupPickerWrap: {
     backgroundColor: colors.card,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
-    flex: 1,
+    flex: 0,
     justifyContent: "center",
     minHeight: 50,
-    overflow: "hidden"
+    overflow: "hidden",
+    width: 96
   },
   ageGroupPicker: {
+    backgroundColor: colors.card,
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "700",
     minHeight: 50
   },
   ageGroupInput: {
@@ -4314,10 +4321,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     color: colors.text,
-    flex: 1,
-    fontSize: 16,
+    flex: 0,
+    fontSize: 18,
+    fontWeight: "700",
     minHeight: 50,
-    paddingHorizontal: 14
+    paddingHorizontal: 14,
+    width: 86
   },
   textArea: {
     minHeight: 96,
@@ -4355,6 +4364,13 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     overflow: "hidden"
+  },
+  formPicker: {
+    backgroundColor: colors.card,
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "700",
+    minHeight: 50
   },
   primaryButtonFull: {
     alignItems: "center",
