@@ -3105,16 +3105,21 @@ function AgeGroupInput({
     <View>
       <Text style={styles.inputLabel}>Alder</Text>
       <View style={styles.ageGroupRow}>
-        <View style={styles.ageGroupPickerWrap}>
-          <Picker
-            selectedValue={prefix}
-            onValueChange={(nextPrefix: string) => updateValue(nextPrefix, age)}
-            style={styles.ageGroupPicker}
-          >
-            <Picker.Item label="Velg" value="" />
-            <Picker.Item label="G" value="G" />
-            <Picker.Item label="J" value="J" />
-          </Picker>
+        <View style={styles.ageGroupToggle}>
+          {(["G", "J"] as const).map((option) => {
+            const selected = prefix === option;
+            return (
+              <Pressable
+                key={option}
+                style={[styles.ageGroupOption, selected && styles.ageGroupOptionSelected]}
+                onPress={() => updateValue(option, age)}
+              >
+                <Text style={[styles.ageGroupOptionText, selected && styles.ageGroupOptionTextSelected]}>
+                  {option}
+                </Text>
+              </Pressable>
+            );
+          })}
         </View>
         <TextInput
           style={styles.ageGroupInput}
@@ -4296,6 +4301,32 @@ const styles = StyleSheet.create({
   ageGroupRow: {
     flexDirection: "row",
     gap: 8
+  },
+  ageGroupToggle: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 50,
+    overflow: "hidden",
+    width: 108
+  },
+  ageGroupOption: {
+    alignItems: "center",
+    flex: 1,
+    justifyContent: "center"
+  },
+  ageGroupOptionSelected: {
+    backgroundColor: colors.cardSoft
+  },
+  ageGroupOptionText: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "800"
+  },
+  ageGroupOptionTextSelected: {
+    color: colors.greenDark
   },
   ageGroupPickerWrap: {
     backgroundColor: colors.card,
