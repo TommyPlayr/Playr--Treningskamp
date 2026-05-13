@@ -1682,6 +1682,7 @@ function AuthScreen() {
             value={password}
             onChangeText={setPassword}
             placeholder="Minst 6 tegn"
+            secureTextEntry
           />
 
           {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
@@ -3043,13 +3044,15 @@ function Input({
   value,
   onChangeText,
   placeholder,
-  multiline
+  multiline,
+  secureTextEntry = false
 }: {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
   placeholder: string;
   multiline?: boolean;
+  secureTextEntry?: boolean;
 }) {
   return (
     <View>
@@ -3061,6 +3064,7 @@ function Input({
         placeholder={placeholder}
         placeholderTextColor={colors.muted}
         multiline={multiline}
+        secureTextEntry={secureTextEntry}
       />
     </View>
   );
