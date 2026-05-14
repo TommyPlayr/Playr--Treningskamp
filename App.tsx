@@ -399,6 +399,7 @@ const getAgeGroupFormValue = (value: string) => {
 };
 
 export default function App() {
+  const legalPage = getLegalPageFromPath();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [matches, setMatches] = useState<Match[]>(isSupabaseConfigured ? [] : initialMatches);
   const [requests, setRequests] = useState<MatchRequest[]>(isSupabaseConfigured ? [] : initialRequests);
@@ -1663,6 +1664,10 @@ export default function App() {
     );
   };
 
+  if (legalPage) {
+    return <LegalPage type={legalPage} />;
+  }
+
   if (isSupabaseConfigured && !authReady) {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -1940,6 +1945,157 @@ function AuthScreen() {
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
+}
+
+function LegalPage({ type }: { type: "privacy" | "terms" }) {
+  const isPrivacy = type === "privacy";
+  const title = isPrivacy ? "Personvernerklæring" : "Brukervilkår";
+  const sections = isPrivacy ? privacySections : termsSections;
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.legalPage}>
+        <PlayrLogo compact />
+        <Text style={styles.legalTitle}>{title}</Text>
+        <Text style={styles.legalUpdated}>Sist oppdatert: 14.05.2026</Text>
+        {sections.map((section) => (
+          <View key={section.title} style={styles.legalSection}>
+            <Text style={styles.legalSectionTitle}>{section.title}</Text>
+            {section.body.map((paragraph) => (
+              <Text key={paragraph} style={styles.legalText}>
+                {paragraph}
+              </Text>
+            ))}
+          </View>
+        ))}
+        <Text style={styles.legalContact}>Kontakt: kontakt@playrmatch.com</Text>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const privacySections = [
+  {
+    title: "1. Om Playr",
+    body: [
+      "Playr er en app for trenere og lag som vil finne, avtale og administrere treningskamper.",
+      "Playr drives i v1 av Tommy Ottesen."
+    ]
+  },
+  {
+    title: "2. Opplysninger vi behandler",
+    body: [
+      "Playr kan behandle e-postadresse, navn på kontaktperson, telefonnummer, lagopplysninger, kampopplysninger, forespørsler og chatmeldinger knyttet til kamper.",
+      "Passord håndteres av Supabase Auth. Playr lagrer ikke passord direkte i appkoden."
+    ]
+  },
+  {
+    title: "3. Hvorfor opplysningene brukes",
+    body: [
+      "Opplysningene brukes for å opprette konto og lagprofil, vise relevante kamper, sende og behandle forespørsler, vise kontaktinformasjon mellom involverte lag og la lag chatte om avtalte kamper."
+    ]
+  },
+  {
+    title: "4. Lagring og databehandler",
+    body: [
+      "Playr bruker Supabase som teknisk leverandør for innlogging, database og lagring av appdata."
+    ]
+  },
+  {
+    title: "5. Deling",
+    body: [
+      "Opplysninger deles ikke med annonsenettverk eller tredjeparter for markedsføring.",
+      "Relevant kamp-, lag- og kontaktinformasjon kan vises til andre brukere i appen når det er nødvendig for å finne, forespørre eller avtale treningskamper."
+    ]
+  },
+  {
+    title: "6. Lokal lagring",
+    body: [
+      "Appen kan lagre enkle innstillinger lokalt i nettleseren, for eksempel interne tellere for hvilke badges brukeren allerede har sett."
+    ]
+  },
+  {
+    title: "7. Rettigheter",
+    body: [
+      "Brukere kan be om innsyn, retting eller sletting av egne opplysninger ved å kontakte kontakt@playrmatch.com."
+    ]
+  },
+  {
+    title: "8. Barn og unge",
+    body: [
+      "Playr er laget for trenere og lagledere. Appen er ikke ment for at barn selv skal opprette konto uten nødvendig samtykke fra foresatte eller klubb/lagansvarlig der dette kreves."
+    ]
+  }
+];
+
+const termsSections = [
+  {
+    title: "1. Om tjenesten",
+    body: [
+      "Playr hjelper trenere og lag med å publisere, finne og avtale treningskamper.",
+      "Playr drives i v1 av Tommy Ottesen."
+    ]
+  },
+  {
+    title: "2. Brukerkonto",
+    body: [
+      "Du er ansvarlig for at informasjonen du legger inn er korrekt, inkludert lag, kontaktperson, kontaktinformasjon og kampdetaljer."
+    ]
+  },
+  {
+    title: "3. Publisering av kamper",
+    body: [
+      "Når du legger ut en kamp, er du ansvarlig for at tidspunkt, sted, nivå og øvrig informasjon er riktig."
+    ]
+  },
+  {
+    title: "4. Forespørsler og avtaler",
+    body: [
+      "En kamp regnes som avtalt når en forespørsel er godkjent i appen. Lagene er selv ansvarlige for praktiske avklaringer rundt oppmøte, bane, dommer, avlysning og lignende."
+    ]
+  },
+  {
+    title: "5. Chat og kommunikasjon",
+    body: [
+      "Chat skal brukes til relevant og ryddig kommunikasjon om kamper. Brukere skal ikke sende støtende, ulovlig eller misvisende innhold."
+    ]
+  },
+  {
+    title: "6. Tilgjengelighet",
+    body: [
+      "Playr leveres som den er. Det kan forekomme feil, nedetid eller endringer i funksjonalitet, særlig i test- og tidlig lanseringsfase."
+    ]
+  },
+  {
+    title: "7. Misbruk",
+    body: [
+      "Kontoer eller lagprofiler kan fjernes dersom appen misbrukes, det legges inn uriktig informasjon, eller brukeren opptrer på en måte som skader andre brukere eller tjenesten."
+    ]
+  },
+  {
+    title: "8. Ansvar",
+    body: [
+      "Playr er et verktøy for kontakt og kampavtaler. Playr er ikke ansvarlig for gjennomføring av kamper, skader, avlysninger eller forhold mellom lagene."
+    ]
+  }
+];
+
+function getLegalPageFromPath(): "privacy" | "terms" | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const path = window.location.pathname.replace(/\/+$/, "").toLowerCase();
+
+  if (path === "/personvern") {
+    return "privacy";
+  }
+
+  if (path === "/vilkar" || path === "/vilkår") {
+    return "terms";
+  }
+
+  return null;
 }
 
 function TeamProfileScreen({
@@ -4018,6 +4174,42 @@ const styles = StyleSheet.create({
     color: colors.greenDark,
     fontSize: 15,
     fontWeight: "900"
+  },
+  legalPage: {
+    backgroundColor: colors.background,
+    flexGrow: 1,
+    gap: 16,
+    padding: 24,
+    paddingBottom: 36
+  },
+  legalTitle: {
+    color: colors.text,
+    fontSize: 26,
+    fontWeight: "900"
+  },
+  legalUpdated: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "700"
+  },
+  legalSection: {
+    gap: 7
+  },
+  legalSectionTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: "900"
+  },
+  legalText: {
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 21
+  },
+  legalContact: {
+    color: colors.greenDark,
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 6
   },
   header: {
     backgroundColor: colors.green,
