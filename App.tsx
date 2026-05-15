@@ -302,6 +302,8 @@ const readSeenNotificationCounts = (profileId: string) => {
     return {
       incoming: Number(parsed.incoming) || 0,
       approved: Number(parsed.approved) || 0,
+      incomingIds: Array.isArray(parsed.incomingIds) ? (parsed.incomingIds as string[]) : [],
+      approvedIds: Array.isArray(parsed.approvedIds) ? (parsed.approvedIds as string[]) : [],
       chatByRequest:
         parsed.chatByRequest && typeof parsed.chatByRequest === "object"
           ? (parsed.chatByRequest as Record<string, number>)
@@ -316,7 +318,9 @@ const saveSeenNotificationCounts = (
   profileId: string,
   incoming: number,
   approved: number,
-  chatByRequest: Record<string, number> = {}
+  chatByRequest: Record<string, number> = {},
+  incomingIds: string[] = [],
+  approvedIds: string[] = []
 ) => {
   if (typeof window === "undefined" || !window.localStorage) {
     return;
@@ -324,7 +328,7 @@ const saveSeenNotificationCounts = (
 
   window.localStorage.setItem(
     `playr-seen-notification-counts-${profileId}`,
-    JSON.stringify({ incoming, approved, chatByRequest })
+    JSON.stringify({ incoming, approved, incomingIds, approvedIds, chatByRequest })
   );
 };
 
@@ -441,8 +445,8 @@ export default function App() {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
-  const [seenIncomingCount, setSeenIncomingCount] = useState(0);
-  const [seenApprovedCount, setSeenApprovedCount] = useState(0);
+  const [seenIncomingRequestIds, setSeenIncomingRequestIds] = useState<string[]>([]);
+  const [seenApprovedRequestIds, setSeenApprovedRequestIds] = useState<string[]>([]);
   const [seenChatByRequest, setSeenChatByRequest] = useState<Record<string, number>>({});
 
   const selectedMatch = matches.find((match) => match.id === selectedMatchId) ?? null;
@@ -474,6 +478,12 @@ export default function App() {
     );
 
     return {
+      incomingIds: requests
+        .filter((request) => hostedIds.has(request.matchId) && request.status === "venter")
+        .map((request) => request.id),
+      approvedIds: requests
+        .filter((request) => request.fromTeamId === profileId && request.status === "godkjent")
+        .map((request) => request.id),
       incoming: requests.filter(
         (request) => hostedIds.has(request.matchId) && request.status === "venter"
       ).length,
@@ -535,14 +545,28 @@ export default function App() {
 
   const pendingIncomingCount = currentNotificationCounts.incoming;
   const approvedMyRequestsCount = currentNotificationCounts.approved;
+  const pendingIncomingRequestIds = currentNotificationCounts.incomingIds;
+  const approvedMyRequestIds = currentNotificationCounts.approvedIds;
   const currentChatNotifications = useMemo(
     () => getChatNotificationDataForProfile(currentProfile.id, seenChatByRequest),
     [authUserId, currentProfile.id, matches, messages, requests, seenChatByRequest, teamProfiles]
   );
   const chatMessageNotificationCount = currentChatNotifications.count;
 
-  const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
-  const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
+  const seenIncomingRequestIdSet = useMemo(
+    () => new Set(seenIncomingRequestIds),
+    [seenIncomingRequestIds]
+  );
+  const seenApprovedRequestIdSet = useMemo(
+    () => new Set(seenApprovedRequestIds),
+    [seenApprovedRequestIds]
+  );
+  const visibleIncomingNotificationCount = pendingIncomingRequestIds.filter(
+    (requestId) => !seenIncomingRequestIdSet.has(requestId)
+  ).length;
+  const visibleApprovedNotificationCount = approvedMyRequestIds.filter(
+    (requestId) => !seenApprovedRequestIdSet.has(requestId)
+  ).length;
   const visibleChatNotificationCount = chatMessageNotificationCount;
   const unreadChatMatchIds = currentChatNotifications.matchIds;
   const openCreateMatch = () => {
@@ -555,11 +579,8 @@ export default function App() {
     setForm(createEmptyForm(profile));
     const saved =
       typeof window === "undefined" ? null : readSeenNotificationCounts(profile.id);
-    const profileCounts = getNotificationCountsForProfile(profile.id);
-    const nextIncoming = saved ? Math.min(saved.incoming, profileCounts.incoming) : 0;
-    const nextApproved = saved ? Math.min(saved.approved, profileCounts.approved) : 0;
-    setSeenIncomingCount(nextIncoming);
-    setSeenApprovedCount(nextApproved);
+    setSeenIncomingRequestIds(saved?.incomingIds ?? []);
+    setSeenApprovedRequestIds(saved?.approvedIds ?? []);
     setSeenChatByRequest(saved?.chatByRequest ?? {});
   };
 
@@ -570,14 +591,21 @@ export default function App() {
 
     const shouldClear = new URLSearchParams(window.location.search).get("clearNotifications") === "1";
     const saved = shouldClear ? null : readSeenNotificationCounts(currentProfile.id);
-    const nextIncoming = saved ? Math.min(saved.incoming, pendingIncomingCount) : 0;
-    const nextApproved = saved ? Math.min(saved.approved, approvedMyRequestsCount) : 0;
+    const nextIncomingIds = saved?.incomingIds ?? [];
+    const nextApprovedIds = saved?.approvedIds ?? [];
     const nextChatByRequest = saved?.chatByRequest ?? {};
 
-    setSeenIncomingCount(nextIncoming);
-    setSeenApprovedCount(nextApproved);
+    setSeenIncomingRequestIds(nextIncomingIds);
+    setSeenApprovedRequestIds(nextApprovedIds);
     setSeenChatByRequest(nextChatByRequest);
-    saveSeenNotificationCounts(currentProfile.id, nextIncoming, nextApproved, nextChatByRequest);
+    saveSeenNotificationCounts(
+      currentProfile.id,
+      nextIncomingIds.length,
+      nextApprovedIds.length,
+      nextChatByRequest,
+      nextIncomingIds,
+      nextApprovedIds
+    );
   }, [appDataReady, currentProfile.id, pendingIncomingCount, approvedMyRequestsCount]);
 
   useEffect(() => {
@@ -585,23 +613,25 @@ export default function App() {
       return;
     }
 
-    if (activeTab === "mine" && seenIncomingCount !== pendingIncomingCount) {
-      setSeenIncomingCount(pendingIncomingCount);
-      saveSeenNotificationCounts(currentProfile.id, pendingIncomingCount, seenApprovedCount, seenChatByRequest);
-    }
-
-    if (activeTab === "inbox" && seenApprovedCount !== approvedMyRequestsCount) {
-      setSeenApprovedCount(approvedMyRequestsCount);
-      saveSeenNotificationCounts(currentProfile.id, seenIncomingCount, approvedMyRequestsCount, seenChatByRequest);
+    if (activeTab === "inbox" && visibleApprovedNotificationCount > 0) {
+      setSeenApprovedRequestIds(approvedMyRequestIds);
+      saveSeenNotificationCounts(
+        currentProfile.id,
+        seenIncomingRequestIds.length,
+        approvedMyRequestIds.length,
+        seenChatByRequest,
+        seenIncomingRequestIds,
+        approvedMyRequestIds
+      );
     }
   }, [
     activeTab,
     appDataReady,
     currentProfile.id,
-    pendingIncomingCount,
-    approvedMyRequestsCount,
-    seenIncomingCount,
-    seenApprovedCount,
+    approvedMyRequestIds,
+    seenIncomingRequestIds,
+    seenApprovedRequestIds,
+    visibleApprovedNotificationCount,
     seenChatByRequest
   ]);
 
@@ -610,26 +640,42 @@ export default function App() {
       return;
     }
 
-    const nextIncoming = Math.min(seenIncomingCount, pendingIncomingCount);
-    const nextApproved = Math.min(seenApprovedCount, approvedMyRequestsCount);
+    const activeIncomingIdSet = new Set(pendingIncomingRequestIds);
+    const activeApprovedIdSet = new Set(approvedMyRequestIds);
+    const nextIncomingIds = seenIncomingRequestIds.filter((requestId) =>
+      activeIncomingIdSet.has(requestId)
+    );
+    const nextApprovedIds = seenApprovedRequestIds.filter((requestId) =>
+      activeApprovedIdSet.has(requestId)
+    );
 
-    if (nextIncoming !== seenIncomingCount) {
-      setSeenIncomingCount(nextIncoming);
+    if (nextIncomingIds.length !== seenIncomingRequestIds.length) {
+      setSeenIncomingRequestIds(nextIncomingIds);
     }
 
-    if (nextApproved !== seenApprovedCount) {
-      setSeenApprovedCount(nextApproved);
+    if (nextApprovedIds.length !== seenApprovedRequestIds.length) {
+      setSeenApprovedRequestIds(nextApprovedIds);
     }
 
-    if (nextIncoming !== seenIncomingCount || nextApproved !== seenApprovedCount) {
-      saveSeenNotificationCounts(currentProfile.id, nextIncoming, nextApproved, seenChatByRequest);
+    if (
+      nextIncomingIds.length !== seenIncomingRequestIds.length ||
+      nextApprovedIds.length !== seenApprovedRequestIds.length
+    ) {
+      saveSeenNotificationCounts(
+        currentProfile.id,
+        nextIncomingIds.length,
+        nextApprovedIds.length,
+        seenChatByRequest,
+        nextIncomingIds,
+        nextApprovedIds
+      );
     }
   }, [
     currentProfile.id,
-    pendingIncomingCount,
-    approvedMyRequestsCount,
-    seenIncomingCount,
-    seenApprovedCount,
+    pendingIncomingRequestIds,
+    approvedMyRequestIds,
+    seenIncomingRequestIds,
+    seenApprovedRequestIds,
     seenChatByRequest
   ]);
 
@@ -652,8 +698,8 @@ export default function App() {
       setAppDataReady(!session?.user);
       setTeamProfiles([]);
       setAuthReady(true);
-      setSeenIncomingCount(0);
-      setSeenApprovedCount(0);
+      setSeenIncomingRequestIds([]);
+      setSeenApprovedRequestIds([]);
       setSeenChatByRequest({});
     });
 
@@ -822,14 +868,21 @@ export default function App() {
       [selectedRequest.id]: seenMessageCount
     };
     setSeenChatByRequest(nextSeenChatByRequest);
-    saveSeenNotificationCounts(currentProfile.id, seenIncomingCount, seenApprovedCount, nextSeenChatByRequest);
+    saveSeenNotificationCounts(
+      currentProfile.id,
+      seenIncomingRequestIds.length,
+      seenApprovedRequestIds.length,
+      nextSeenChatByRequest,
+      seenIncomingRequestIds,
+      seenApprovedRequestIds
+    );
   }, [
     authUserId,
     currentProfile.id,
     messages,
     seenChatByRequest,
-    seenIncomingCount,
-    seenApprovedCount,
+    seenIncomingRequestIds,
+    seenApprovedRequestIds,
     selectedRequest,
     selectedRequestMatch,
     teamProfiles
@@ -1800,22 +1853,17 @@ export default function App() {
           approvedMyRequestsCount={visibleApprovedNotificationCount}
           chatMessageCount={visibleChatNotificationCount}
           onOpenInbox={() => {
-            setSeenIncomingCount(pendingIncomingCount);
-            saveSeenNotificationCounts(
-              currentProfile.id,
-              pendingIncomingCount,
-              seenApprovedCount,
-              seenChatByRequest
-            );
             setActiveTab("mine");
           }}
           onOpenMine={() => {
-            setSeenApprovedCount(approvedMyRequestsCount);
+            setSeenApprovedRequestIds(approvedMyRequestIds);
             saveSeenNotificationCounts(
               currentProfile.id,
-              seenIncomingCount,
-              approvedMyRequestsCount,
-              seenChatByRequest
+              seenIncomingRequestIds.length,
+              approvedMyRequestIds.length,
+              seenChatByRequest,
+              seenIncomingRequestIds,
+              approvedMyRequestIds
             );
             setActiveTab("inbox");
           }}
@@ -1866,12 +1914,26 @@ export default function App() {
           setCurrentProfile(fallbackProfile);
           setTeamProfiles([]);
           setProfileEditVisible(false);
-          setSeenIncomingCount(0);
-          setSeenApprovedCount(0);
+          setSeenIncomingRequestIds([]);
+          setSeenApprovedRequestIds([]);
           setSeenChatByRequest({});
         }}
         onOpenMatch={(id) => setSelectedMatchId(id)}
-        onOpenRequest={(id) => setSelectedRequestId(id)}
+        onOpenRequest={(id) => {
+          if (pendingIncomingRequestIds.includes(id) && !seenIncomingRequestIdSet.has(id)) {
+            const nextSeenIncomingIds = [...seenIncomingRequestIds, id];
+            setSeenIncomingRequestIds(nextSeenIncomingIds);
+            saveSeenNotificationCounts(
+              currentProfile.id,
+              nextSeenIncomingIds.length,
+              seenApprovedRequestIds.length,
+              seenChatByRequest,
+              nextSeenIncomingIds,
+              seenApprovedRequestIds
+            );
+          }
+          setSelectedRequestId(id);
+        }}
       />
     );
   };
