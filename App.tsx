@@ -493,8 +493,12 @@ export default function App() {
   const selectTeamProfile = (profile: TeamProfile) => {
     setCurrentProfile(profile);
     setForm(createEmptyForm(profile));
-    setSeenIncomingCount(0);
-    setSeenApprovedCount(0);
+    const saved =
+      typeof window === "undefined" ? null : readSeenNotificationCounts(profile.id);
+    const nextIncoming = saved ? Math.min(saved.incoming, pendingIncomingCount) : pendingIncomingCount;
+    const nextApproved = saved ? Math.min(saved.approved, approvedMyRequestsCount) : approvedMyRequestsCount;
+    setSeenIncomingCount(nextIncoming);
+    setSeenApprovedCount(nextApproved);
   };
 
   useEffect(() => {
