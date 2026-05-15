@@ -2050,22 +2050,30 @@ function Header({
         <Text style={styles.headerTitle}>{title}</Text>
       ) : (
         <View style={styles.headerProfileWrap}>
-          <Text style={styles.headerProfileName}>{profile.contactName}</Text>
-          {profiles.length > 1 ? (
-            <Pressable
-              style={styles.headerTeamSwitch}
-              onPress={() => {
-                const currentIndex = profiles.findIndex((teamProfile) => teamProfile.id === profile.id);
-                const nextProfile = profiles[(currentIndex + 1) % profiles.length];
-                onSelectProfile(nextProfile.id);
-              }}
-            >
-              <Text style={styles.headerTeamSwitchText}>{formatProfileTeamLine(profile)}</Text>
-              <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
-            </Pressable>
-          ) : (
-            <Text style={styles.headerProfileTeam}>{formatProfileTeamLine(profile)}</Text>
-          )}
+          <Text style={styles.headerProfileName} numberOfLines={1}>
+            {profile.contactName}
+          </Text>
+          <View style={styles.headerTeamWrap}>
+            {profiles.length > 1 ? (
+              <Pressable
+                style={styles.headerTeamSwitch}
+                onPress={() => {
+                  const currentIndex = profiles.findIndex((teamProfile) => teamProfile.id === profile.id);
+                  const nextProfile = profiles[(currentIndex + 1) % profiles.length];
+                  onSelectProfile(nextProfile.id);
+                }}
+              >
+                <Text style={styles.headerTeamSwitchText} numberOfLines={1}>
+                  {formatProfileTeamLine(profile)}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
+              </Pressable>
+            ) : (
+              <Text style={styles.headerProfileTeam} numberOfLines={1}>
+                {formatProfileTeamLine(profile)}
+              </Text>
+            )}
+          </View>
         </View>
       )}
       {showHomeLogo ? <PlayrLogo compact /> : null}
@@ -4515,35 +4523,46 @@ const styles = StyleSheet.create({
     textAlign: "center"
   },
   headerProfileWrap: {
-    alignItems: "flex-start",
     left: 22,
     position: "absolute",
     right: 22,
-    top: 8
+    top: 8,
+    minHeight: 30
   },
   headerProfileName: {
     color: "#FFFFFF",
     fontSize: 12,
     fontWeight: "700",
-    marginBottom: 3
+    left: 0,
+    maxWidth: "44%",
+    position: "absolute",
+    top: 0
+  },
+  headerTeamWrap: {
+    alignItems: "flex-end",
+    maxWidth: "58%",
+    position: "absolute",
+    right: 0,
+    top: 0
   },
   headerProfileTeam: {
     color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: "800"
+    fontWeight: "800",
+    textAlign: "right"
   },
   headerTeamSwitch: {
     alignItems: "center",
     flexDirection: "row",
     gap: 4,
-    justifyContent: "flex-start",
-    maxWidth: 260,
+    justifyContent: "flex-end",
     paddingVertical: 2
   },
   headerTeamSwitchText: {
     color: "#FFFFFF",
     fontSize: 17,
-    fontWeight: "900"
+    fontWeight: "900",
+    textAlign: "right"
   },
   content: {
     flex: 1
