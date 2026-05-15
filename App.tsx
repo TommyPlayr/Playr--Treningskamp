@@ -2312,16 +2312,18 @@ function AuthScreen() {
   );
 }
 
-function LegalPage({ type }: { type: "privacy" | "terms" }) {
+function LegalPage({ type }: { type: "privacy" | "terms" | "deletion" }) {
   const isPrivacy = type === "privacy";
+  const isDeletion = type === "deletion";
   const title = isPrivacy ? "Personvernerklæring" : "Brukervilkår";
-  const sections = isPrivacy ? privacySections : termsSections;
+  const sections = isPrivacy ? privacySections : isDeletion ? deletionSections : termsSections;
+  const pageTitle = isDeletion ? "Slett konto og data" : title;
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.legalPage}>
         <PlayrLogo compact />
-        <Text style={styles.legalTitle}>{title}</Text>
+        <Text style={styles.legalTitle}>{pageTitle}</Text>
         <Text style={styles.legalUpdated}>Sist oppdatert: 14.05.2026</Text>
         {sections.map((section) => (
           <View key={section.title} style={styles.legalSection}>
@@ -2445,15 +2447,56 @@ const termsSections = [
   }
 ];
 
-function getLegalPageFromPath(): "privacy" | "terms" | null {
+const deletionSections = [
+  {
+    title: "1. Slett konto i appen",
+    body: [
+      "Du kan slette kontoen din direkte i Playr.",
+      "Logg inn i appen, g\u00e5 til fanen Foresp\u00f8rsler og trykk Slett konto. Bekreft deretter at du vil slette kontoen."
+    ]
+  },
+  {
+    title: "2. Hva slettes",
+    body: [
+      "N\u00e5r du sletter kontoen, slettes Playr-data knyttet til brukeren din, inkludert lagprofiler, kamper du har lagt ut, foresp\u00f8rsler og chatmeldinger som er knyttet til kontoen.",
+      "Du blir logget ut etter at slettingen er gjennomf\u00f8rt."
+    ]
+  },
+  {
+    title: "3. Be om hjelp",
+    body: [
+      "Hvis du ikke f\u00e5r logget inn, eller trenger hjelp til sletting, kan du kontakte kontakt@playrmatch.com fra e-postadressen kontoen er registrert med."
+    ]
+  },
+  {
+    title: "4. Behandlingstid",
+    body: [
+      "Sletting i appen gjennomf\u00f8res normalt med en gang. Henvendelser p\u00e5 e-post behandles s\u00e5 raskt som mulig."
+    ]
+  }
+];
+
+function getLegalPageFromPath(): "privacy" | "terms" | "deletion" | null {
   if (typeof window === "undefined") {
     return null;
   }
 
   const path = window.location.pathname.replace(/\/+$/, "").toLowerCase();
+  const href = window.location.href.toLowerCase();
 
-  if (path === "/personvern") {
+  if (path === "/personvern" || href.includes("/personvern")) {
     return "privacy";
+  }
+
+  if (
+    path === "/slett-konto" ||
+    path === "/slett-data" ||
+    path === "/delete-account" ||
+    href.includes("/slett-konto") ||
+    href.includes("/slett-data") ||
+    href.includes("/delete-account")
+  ) {
+    return "deletion";
   }
 
   if (path === "/vilkar" || path === "/vilkår") {
