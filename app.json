@@ -17,7 +17,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.playrmatch.playr"
+      "bundleIdentifier": "com.playrmatch.playr",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.playrmatch.playr",
@@ -28,6 +31,11 @@
     },
     "web": {
       "bundler": "metro"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "4d8e55d1-1918-436c-8afd-bba8630461e4"
+      }
     }
   }
 }
