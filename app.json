@@ -13,16 +13,13 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "no.playr.treningskamp"
+      "bundleIdentifier": "com.playrmatch.playr"
     },
     "android": {
-      "package": "no.playr.treningskamp"
+      "package": "com.playrmatch.playr"
     },
     "web": {
       "bundler": "metro"
-    },
-    "plugins": [
-      "expo-font"
-    ]
+    }
   }
 }
