@@ -4,8 +4,12 @@
     "slug": "playr-treningskamp",
     "version": "1.0.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "playr",
     "userInterfaceStyle": "light",
     "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
       "backgroundColor": "#F8FBF7"
     },
     "assetBundlePatterns": [
@@ -16,7 +20,11 @@
       "bundleIdentifier": "com.playrmatch.playr"
     },
     "android": {
-      "package": "com.playrmatch.playr"
+      "package": "com.playrmatch.playr",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F8FBF7"
+      }
     },
     "web": {
       "bundler": "metro"
