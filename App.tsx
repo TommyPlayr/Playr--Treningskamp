@@ -3208,6 +3208,9 @@ function MatchesScreen({
   const [ageFilter, setAgeFilter] = useState("Alle");
   const [hideAgreed, setHideAgreed] = useState(false);
   const [searchText, setSearchText] = useState("");
+  const [openFilter, setOpenFilter] = useState<"sport" | "age" | null>(null);
+
+  const sportOptions: Array<Sport | "Alle"> = ["Alle", "Fotball", "Handball"];
 
   const ageOptions = useMemo(
     () =>
@@ -3216,6 +3219,9 @@ function MatchesScreen({
       ),
     [matches]
   );
+  const ageFilterOptions = ["Alle", ...ageOptions];
+  const activeFilterOptions = openFilter === "sport" ? sportOptions : ageFilterOptions;
+
   const filtered = matches
     .filter((match) => {
       const sportMatches = sportFilter === "Alle" || match.sport === sportFilter;
@@ -3239,35 +3245,60 @@ function MatchesScreen({
   return (
     <View style={styles.screen}>
       <View style={styles.toolbar}>
-        <View style={styles.filterPill}>
-          <Picker
-            selectedValue={sportFilter}
-            onValueChange={setSportFilter}
-            style={styles.compactPicker}
-            itemStyle={styles.compactPickerItem}
-          >
-            <Picker.Item label="Alle idretter" value="Alle" />
-            <Picker.Item label="Fotball" value="Fotball" />
-            <Picker.Item label="HÃ¥ndball" value="Handball" />
-          </Picker>
-        </View>
-        <View style={styles.filterPill}>
-          <Picker
-            selectedValue={ageFilter}
-            onValueChange={setAgeFilter}
-            style={styles.compactPicker}
-            itemStyle={styles.compactPickerItem}
-          >
-            <Picker.Item label="Alle Ã¥rskull" value="Alle" />
-            {ageOptions.map((age) => (
-              <Picker.Item key={age} label={age} value={age} />
-            ))}
-          </Picker>
-        </View>
+        <Pressable style={styles.filterPillButton} onPress={() => setOpenFilter("sport")}>
+          <Text style={styles.filterPillText} numberOfLines={1}>
+            {sportFilter === "Alle" ? "Alle idretter" : formatSport(sportFilter)}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.greenDark} />
+        </Pressable>
+        <Pressable style={styles.filterPillButton} onPress={() => setOpenFilter("age")}>
+          <Text style={styles.filterPillText} numberOfLines={1}>
+            {ageFilter === "Alle" ? "Alle årskull" : ageFilter}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.greenDark} />
+        </Pressable>
         <Pressable style={styles.iconButton} onPress={onCreateMatch}>
           <Ionicons name="add" size={24} color="#FFFFFF" />
         </Pressable>
       </View>
+
+      <Modal visible={Boolean(openFilter)} transparent animationType="fade" onRequestClose={() => setOpenFilter(null)}>
+        <Pressable style={styles.filterSheetBackdrop} onPress={() => setOpenFilter(null)}>
+          <View style={styles.filterSheet}>
+            <Text style={styles.filterSheetTitle}>
+              {openFilter === "sport" ? "Velg idrett" : "Velg årskull"}
+            </Text>
+            {activeFilterOptions.map((option) => {
+              const isSelected = openFilter === "sport" ? option === sportFilter : option === ageFilter;
+              return (
+                <Pressable
+                  key={option}
+                  style={[styles.filterOption, isSelected && styles.filterOptionActive]}
+                  onPress={() => {
+                    if (openFilter === "sport") {
+                      setSportFilter(option as Sport | "Alle");
+                    } else {
+                      setAgeFilter(option);
+                    }
+                    setOpenFilter(null);
+                  }}
+                >
+                  <Text style={[styles.filterOptionText, isSelected && styles.filterOptionTextActive]}>
+                    {option === "Alle"
+                      ? openFilter === "sport"
+                        ? "Alle idretter"
+                        : "Alle årskull"
+                      : openFilter === "sport"
+                        ? formatSport(option as Sport)
+                        : option}
+                  </Text>
+                  {isSelected ? <Ionicons name="checkmark" size={20} color={colors.greenDark} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Modal>
 
       <Pressable style={styles.filterToggle} onPress={() => setHideAgreed((current) => !current)}>
         <View style={[styles.checkbox, hideAgreed && styles.checkboxActive]}>
@@ -5178,6 +5209,62 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 16,
     height: 48
+  },
+  filterPillButton: {
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flex: 1,
+    flexDirection: "row",
+    height: 48,
+    justifyContent: "space-between",
+    paddingHorizontal: 12
+  },
+  filterPillText: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700"
+  },
+  filterSheetBackdrop: {
+    backgroundColor: "rgba(0, 0, 0, 0.18)",
+    flex: 1,
+    justifyContent: "flex-end"
+  },
+  filterSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    padding: 18,
+    paddingBottom: 30
+  },
+  filterSheetTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "900",
+    marginBottom: 10
+  },
+  filterOption: {
+    alignItems: "center",
+    borderRadius: 8,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 48,
+    paddingHorizontal: 10
+  },
+  filterOptionActive: {
+    backgroundColor: colors.cardSoft
+  },
+  filterOptionText: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: "700"
+  },
+  filterOptionTextActive: {
+    color: colors.greenDark,
+    fontWeight: "900"
   },
   iconButton: {
     alignItems: "center",
