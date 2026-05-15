@@ -439,6 +439,11 @@ export default function App() {
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
   const editingMatch = matches.find((match) => match.id === editMatchId) ?? null;
 
+  const myTeamIds = useMemo(
+    () => new Set(teamProfiles.map((profile) => profile.id)),
+    [teamProfiles]
+  );
+
   const selectedMatchProfile =
     selectedMatch && isMatchOwnedByProfiles(selectedMatch, teamProfiles)
       ? getProfileForMatch(selectedMatch, teamProfiles) ?? currentProfile
