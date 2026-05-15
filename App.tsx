@@ -3253,7 +3253,7 @@ function MatchesScreen({
         </Pressable>
         <Pressable style={styles.filterPillButton} onPress={() => setOpenFilter("age")}>
           <Text style={styles.filterPillText} numberOfLines={1}>
-            {ageFilter === "Alle" ? "Alle årskull" : ageFilter}
+            {ageFilter === "Alle" ? "Alle Ã¥rskull" : ageFilter}
           </Text>
           <Ionicons name="chevron-down" size={18} color={colors.greenDark} />
         </Pressable>
@@ -3266,7 +3266,7 @@ function MatchesScreen({
         <Pressable style={styles.filterSheetBackdrop} onPress={() => setOpenFilter(null)}>
           <View style={styles.filterSheet}>
             <Text style={styles.filterSheetTitle}>
-              {openFilter === "sport" ? "Velg idrett" : "Velg årskull"}
+              {openFilter === "sport" ? "Velg idrett" : "Velg Ã¥rskull"}
             </Text>
             {activeFilterOptions.map((option) => {
               const isSelected = openFilter === "sport" ? option === sportFilter : option === ageFilter;
@@ -3287,7 +3287,7 @@ function MatchesScreen({
                     {option === "Alle"
                       ? openFilter === "sport"
                         ? "Alle idretter"
-                        : "Alle årskull"
+                        : "Alle Ã¥rskull"
                       : openFilter === "sport"
                         ? formatSport(option as Sport)
                         : option}
