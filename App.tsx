@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useState } from "react";
+import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -412,7 +412,73 @@ const getAgeGroupFormValue = (value: string) => {
   return birthYear > 0 ? `${prefix}${birthYear}` : "";
 };
 
+type StartupErrorBoundaryState = {
+  errorMessage: string | null;
+};
+
+class StartupErrorBoundary extends Component<{ children: ReactNode }, StartupErrorBoundaryState> {
+  state: StartupErrorBoundaryState = { errorMessage: null };
+
+  static getDerivedStateFromError(error: Error): StartupErrorBoundaryState {
+    return { errorMessage: error?.message ?? String(error) };
+  }
+
+  render() {
+    if (this.state.errorMessage) {
+      return (
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.loadingScreen}>
+            <Text style={styles.title}>Playr stoppet ved oppstart</Text>
+            <Text style={styles.bodyText}>{this.state.errorMessage}</Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
 export default function App() {
+  const [startupError, setStartupError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const errorUtils = (globalThis as any).ErrorUtils;
+    if (!errorUtils?.getGlobalHandler || !errorUtils?.setGlobalHandler) {
+      return;
+    }
+
+    const originalHandler = errorUtils.getGlobalHandler();
+
+    errorUtils.setGlobalHandler((error: Error, isFatal?: boolean) => {
+      setStartupError(`${isFatal ? "Fatal" : "Error"}: ${error?.message ?? String(error)}`);
+      originalHandler?.(error, isFatal);
+    });
+
+    return () => {
+      errorUtils.setGlobalHandler(originalHandler);
+    };
+  }, []);
+
+  if (startupError) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingScreen}>
+          <Text style={styles.title}>Playr stoppet ved oppstart</Text>
+          <Text style={styles.bodyText}>{startupError}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <StartupErrorBoundary>
+      <PlayrApp />
+    </StartupErrorBoundary>
+  );
+}
+
+function PlayrApp() {
   const legalPage = getLegalPageFromPath();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [matches, setMatches] = useState<Match[]>(isSupabaseConfigured ? [] : initialMatches);
