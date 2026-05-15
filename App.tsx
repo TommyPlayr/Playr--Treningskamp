@@ -73,6 +73,7 @@ type MatchRequest = {
 type ChatMessage = {
   id: string;
   requestId: string;
+  senderUserId?: string;
   sender: string;
   text: string;
   createdAt: string;
@@ -415,6 +416,7 @@ export default function App() {
   const [editMatchId, setEditMatchId] = useState<string | null>(null);
   const [profileEditVisible, setProfileEditVisible] = useState(false);
   const [messageText, setMessageText] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [chatFeedback, setChatFeedback] = useState<string | null>(null);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isSendingRequest, setIsSendingRequest] = useState(false);
@@ -704,6 +706,7 @@ export default function App() {
 
   useEffect(() => {
     setMessageText("");
+    setEditingMessageId(null);
     setChatFeedback(null);
   }, [selectedRequestId]);
 
@@ -1467,6 +1470,59 @@ export default function App() {
       return;
     }
 
+    if (editingMessageId) {
+      const requestMessages = messages.filter((message) => message.requestId === selectedRequest.id);
+      const isOwnMessage = (message: ChatMessage) =>
+        (authUserId ? message.senderUserId === authUserId : false) ||
+        (!message.senderUserId && message.sender === currentProfile.contactName);
+      const lastOwnMessage = [...requestMessages].reverse().find(isOwnMessage);
+
+      if (!lastOwnMessage || lastOwnMessage.id !== editingMessageId) {
+        setChatFeedback("Du kan bare redigere den siste meldingen du selv har sendt.");
+        return;
+      }
+
+      const previousMessages = messages;
+      setIsSendingMessage(true);
+      setChatFeedback(null);
+      setMessages((current) =>
+        current.map((message) =>
+          message.id === editingMessageId ? { ...message, text, createdAt: "Nå" } : message
+        )
+      );
+
+      try {
+        if (isSupabaseConfigured && supabase && isUuid(editingMessageId)) {
+          if (!authUserId) {
+            throw new Error("Du må være innlogget for å redigere meldingen.");
+          }
+
+          const { error } = await supabase
+            .from("chat_messages")
+            .update({ text })
+            .eq("id", editingMessageId)
+            .eq("sender_user_id", authUserId)
+            .select("id")
+            .single();
+
+          if (error) {
+            throw error;
+          }
+        }
+
+        setEditingMessageId(null);
+        setMessageText("");
+      } catch (error) {
+        setMessages(previousMessages);
+        setMessageText(text);
+        setChatFeedback(getErrorMessage(error));
+      } finally {
+        setIsSendingMessage(false);
+      }
+
+      return;
+    }
+
     setIsSendingMessage(true);
     setChatFeedback(null);
     let chatMessage: ChatMessage | null = null;
@@ -1476,6 +1532,7 @@ export default function App() {
         chatMessage = {
           id: createLocalId(),
           requestId: selectedRequest.id,
+          senderUserId: authUserId ?? undefined,
           sender: currentProfile.contactName,
           text,
           createdAt: "Nå"
@@ -1489,6 +1546,7 @@ export default function App() {
         chatMessage = {
           id: createLocalId(),
           requestId: selectedRequest.id,
+          senderUserId: authUserId ?? undefined,
           sender: currentProfile.contactName,
           text,
           createdAt: "Nå"
@@ -1561,6 +1619,7 @@ export default function App() {
       chatMessage = {
         id: createLocalId(),
         requestId: requestIdForChat,
+        senderUserId: authUserId,
         sender: currentProfile.contactName,
         text,
         createdAt: "Nå"
@@ -1588,6 +1647,18 @@ export default function App() {
     } finally {
       setIsSendingMessage(false);
     }
+  };
+
+  const startEditingChatMessage = (message: ChatMessage) => {
+    setEditingMessageId(message.id);
+    setMessageText(message.text);
+    setChatFeedback(null);
+  };
+
+  const cancelEditingChatMessage = () => {
+    setEditingMessageId(null);
+    setMessageText("");
+    setChatFeedback(null);
   };
 
   const renderContent = () => {
@@ -1796,13 +1867,17 @@ export default function App() {
       <RequestDetailsModal
         request={selectedRequest}
         profile={selectedRequestProfile}
+        authUserId={authUserId}
         match={selectedRequestMatch}
         messages={selectedRequest ? messages.filter((message) => message.requestId === selectedRequest.id) : []}
         messageText={messageText}
+        editingMessageId={editingMessageId}
         chatFeedback={chatFeedback}
         isSendingMessage={isSendingMessage}
         onMessageTextChange={setMessageText}
         onSendChatMessage={sendChatMessage}
+        onEditChatMessage={startEditingChatMessage}
+        onCancelEditChatMessage={cancelEditingChatMessage}
         onApprove={() => selectedRequest && approveRequest(selectedRequest)}
         onDecline={() => selectedRequest && declineRequest(selectedRequest)}
         onWithdraw={() => selectedRequest && withdrawRequest(selectedRequest)}
@@ -3402,13 +3477,17 @@ function MatchDetailsModal({
 function RequestDetailsModal({
   request,
   profile,
+  authUserId,
   match,
   messages,
   messageText,
+  editingMessageId,
   chatFeedback,
   isSendingMessage,
   onMessageTextChange,
   onSendChatMessage,
+  onEditChatMessage,
+  onCancelEditChatMessage,
   onApprove,
   onDecline,
   onWithdraw,
@@ -3416,13 +3495,17 @@ function RequestDetailsModal({
 }: {
   request: MatchRequest | null;
   profile: TeamProfile;
+  authUserId: string | null;
   match: Match | null;
   messages: ChatMessage[];
   messageText: string;
+  editingMessageId: string | null;
   chatFeedback: string | null;
   isSendingMessage: boolean;
   onMessageTextChange: (text: string) => void;
   onSendChatMessage: () => void;
+  onEditChatMessage: (message: ChatMessage) => void;
+  onCancelEditChatMessage: () => void;
   onApprove: () => void;
   onDecline: () => void;
   onWithdraw: () => void;
@@ -3434,6 +3517,11 @@ function RequestDetailsModal({
 
   const isIncoming = match.hostTeamId === profile.id;
   const canWithdraw = request.fromTeamId === profile.id && request.status !== "avslatt";
+  const isOwnMessage = (message: ChatMessage) =>
+    (authUserId ? message.senderUserId === authUserId : false) ||
+    (!message.senderUserId && message.sender === profile.contactName);
+  const lastEditableMessageId = [...messages].reverse().find(isOwnMessage)?.id ?? null;
+  const isEditingMessage = Boolean(editingMessageId);
 
   return (
     <Modal visible animationType="none" presentationStyle="pageSheet">
@@ -3479,11 +3567,30 @@ function RequestDetailsModal({
               {messages.length === 0 ? <Text style={styles.cardMeta}>Ingen meldinger enda.</Text> : null}
               {messages.map((message) => (
                 <View key={message.id} style={styles.messageBubble}>
-                  <Text style={styles.messageSender}>{message.sender} · {message.createdAt}</Text>
+                  <View style={styles.messageHeader}>
+                    <Text style={styles.messageSender}>{message.sender} · {message.createdAt}</Text>
+                    {message.id === lastEditableMessageId ? (
+                      <Pressable
+                        onPress={() => onEditChatMessage(message)}
+                        style={styles.editMessageButton}
+                      >
+                        <Text style={styles.editMessageButtonText}>Rediger</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
                   <Text style={styles.messageText}>{message.text}</Text>
                 </View>
               ))}
             </View>
+
+            {isEditingMessage ? (
+              <View style={styles.editingNotice}>
+                <Text style={styles.editingNoticeText}>Redigerer siste melding</Text>
+                <Pressable onPress={onCancelEditChatMessage}>
+                  <Text style={styles.cancelEditText}>Avbryt</Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             <View style={styles.chatInputRow}>
               <TextInput
@@ -3504,7 +3611,7 @@ function RequestDetailsModal({
                 {isSendingMessage ? (
                   <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Ionicons name="send" size={18} color="#FFFFFF" />
+                  <Ionicons name={isEditingMessage ? "checkmark" : "send"} size={18} color="#FFFFFF" />
                 )}
               </Pressable>
             </View>
@@ -3855,6 +3962,7 @@ function mapDatabaseChatMessage(row: DatabaseChatMessageRow): ChatMessage {
   return {
     id: row.id,
     requestId: row.request_id,
+    senderUserId: row.sender_user_id,
     sender: row.users?.full_name ?? "Trener",
     text: row.text,
     createdAt: formatRelativeDate(row.created_at)
@@ -5185,16 +5293,57 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     padding: 12
   },
+  messageHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "space-between",
+    marginBottom: 4
+  },
   messageSender: {
     color: colors.greenDark,
+    flex: 1,
     fontSize: 12,
-    fontWeight: "900",
-    marginBottom: 4
+    fontWeight: "900"
+  },
+  editMessageButton: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  editMessageButtonText: {
+    color: colors.greenDark,
+    fontSize: 12,
+    fontWeight: "900"
   },
   messageText: {
     color: colors.text,
     fontSize: 15,
     lineHeight: 21
+  },
+  editingNotice: {
+    alignItems: "center",
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  editingNoticeText: {
+    color: colors.greenDark,
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  cancelEditText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "900"
   },
   chatInputRow: {
     alignItems: "center",
