@@ -287,9 +287,19 @@ const initialRequests: MatchRequest[] = [
 const initialMessages: ChatMessage[] = [
 ];
 
+type SeenNotificationCounts = {
+  incoming: number;
+  approved: number;
+  incomingIds: string[];
+  approvedIds: string[];
+  chatByRequest: Record<string, number>;
+};
+
+const nativeSeenNotificationCounts: Record<string, SeenNotificationCounts> = {};
+
 const readSeenNotificationCounts = (profileId: string) => {
   if (typeof window === "undefined" || !window.localStorage) {
-    return null;
+    return nativeSeenNotificationCounts[profileId] ?? null;
   }
 
   try {
@@ -322,13 +332,16 @@ const saveSeenNotificationCounts = (
   incomingIds: string[] = [],
   approvedIds: string[] = []
 ) => {
+  const payload = { incoming, approved, incomingIds, approvedIds, chatByRequest };
+
   if (typeof window === "undefined" || !window.localStorage) {
+    nativeSeenNotificationCounts[profileId] = payload;
     return;
   }
 
   window.localStorage.setItem(
     `playr-seen-notification-counts-${profileId}`,
-    JSON.stringify({ incoming, approved, incomingIds, approvedIds, chatByRequest })
+    JSON.stringify(payload)
   );
 };
 
@@ -2353,12 +2366,21 @@ function AuthScreen() {
             value={email}
             onChangeText={setEmail}
             placeholder="navn@klubb.no"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="username"
+            autoComplete="email"
           />
           <Input
             label="Passord"
             value={password}
             onChangeText={setPassword}
             placeholder="Minst 6 tegn"
+            autoCapitalize="none"
+            autoCorrect={false}
+            textContentType="password"
+            autoComplete="password"
             secureTextEntry
           />
 
@@ -3222,6 +3244,7 @@ function MatchesScreen({
             selectedValue={sportFilter}
             onValueChange={setSportFilter}
             style={styles.compactPicker}
+            itemStyle={styles.compactPickerItem}
           >
             <Picker.Item label="Alle idretter" value="Alle" />
             <Picker.Item label="Fotball" value="Fotball" />
@@ -3233,6 +3256,7 @@ function MatchesScreen({
             selectedValue={ageFilter}
             onValueChange={setAgeFilter}
             style={styles.compactPicker}
+            itemStyle={styles.compactPickerItem}
           >
             <Picker.Item label="Alle årskull" value="Alle" />
             {ageOptions.map((age) => (
@@ -4128,7 +4152,12 @@ function Input({
   onChangeText,
   placeholder,
   multiline,
-  secureTextEntry = false
+  secureTextEntry = false,
+  keyboardType = "default",
+  autoCapitalize = "sentences",
+  autoCorrect = true,
+  textContentType,
+  autoComplete
 }: {
   label: string;
   value: string;
@@ -4136,6 +4165,11 @@ function Input({
   placeholder: string;
   multiline?: boolean;
   secureTextEntry?: boolean;
+  keyboardType?: "default" | "email-address" | "numeric" | "number-pad" | "phone-pad";
+  autoCapitalize?: "none" | "sentences" | "words" | "characters";
+  autoCorrect?: boolean;
+  textContentType?: any;
+  autoComplete?: any;
 }) {
   return (
     <View>
@@ -4148,6 +4182,11 @@ function Input({
         placeholderTextColor={colors.muted}
         multiline={multiline}
         secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType}
+        autoCapitalize={autoCapitalize}
+        autoCorrect={autoCorrect}
+        textContentType={textContentType}
+        autoComplete={autoComplete}
       />
     </View>
   );
@@ -5131,6 +5170,13 @@ const styles = StyleSheet.create({
     overflow: "hidden"
   },
   compactPicker: {
+    color: colors.text,
+    height: 48,
+    backgroundColor: colors.card
+  },
+  compactPickerItem: {
+    color: colors.text,
+    fontSize: 16,
     height: 48
   },
   iconButton: {
