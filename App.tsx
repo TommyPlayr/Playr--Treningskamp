@@ -441,6 +441,7 @@ export default function App() {
   const [isUpdatingMatch, setIsUpdatingMatch] = useState(false);
   const [isDeletingMatch, setIsDeletingMatch] = useState(false);
   const [isCancelingMatch, setIsCancelingMatch] = useState(false);
+  const [isDeletingAccount, setIsDeletingAccount] = useState(false);
   const [editForm, setEditForm] = useState(createEmptyForm(fallbackProfile));
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -1637,6 +1638,87 @@ export default function App() {
     selectTeamProfile(nextActiveProfile);
   };
 
+  const resetToSignedOutState = () => {
+    setUserEmail(null);
+    setAuthUserId(null);
+    setHasTeamProfile(false);
+    setCurrentProfile(fallbackProfile);
+    setTeamProfiles([]);
+    setMatches([]);
+    setRequests([]);
+    setMessages([]);
+    setSelectedMatchId(null);
+    setSelectedRequestId(null);
+    setProfileEditVisible(false);
+    setCreateVisible(false);
+    setSeenIncomingRequestIds([]);
+    setSeenApprovedRequestIds([]);
+    setSeenChatByRequest({});
+  };
+
+  const deleteAccount = async () => {
+    if (isDeletingAccount) {
+      return;
+    }
+
+    setIsDeletingAccount(true);
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        if (!authUserId) {
+          throw new Error("Du mÃ¥ vÃ¦re innlogget for Ã¥ slette kontoen.");
+        }
+
+        const { error } = await supabase.rpc("delete_own_account");
+
+        if (error) {
+          throw error;
+        }
+
+        await supabase.auth.signOut();
+      }
+
+      if (typeof window !== "undefined" && window.localStorage) {
+        teamProfiles.forEach((profile) => {
+          window.localStorage.removeItem(`playr-seen-notification-counts-${profile.id}`);
+        });
+      }
+
+      resetToSignedOutState();
+
+      if (typeof window !== "undefined" && typeof window.alert === "function") {
+        window.alert("Kontoen og Playr-dataene dine er slettet.");
+      } else {
+        Alert.alert("Konto slettet", "Kontoen og Playr-dataene dine er slettet.");
+      }
+    } catch (error) {
+      Alert.alert("Kontoen ble ikke slettet", getReadableErrorMessage(error));
+    } finally {
+      setIsDeletingAccount(false);
+    }
+  };
+
+  const confirmDeleteAccount = () => {
+    const message =
+      "Dette sletter lagprofiler, kamper du har lagt ut, forespørsler og chat knyttet til kontoen din i Playr. Dette kan ikke angres.";
+
+    if (typeof window !== "undefined" && typeof window.confirm === "function") {
+      if (window.confirm(`Slette konto?\n\n${message}`)) {
+        deleteAccount();
+      }
+      return;
+    }
+
+    Alert.alert("Slette konto?", message, [
+      { text: "Avbryt", style: "cancel" },
+      {
+        text: "Slett konto",
+        style: "destructive",
+        onPress: deleteAccount
+      }
+    ]);
+  };
+
   const sendChatMessage = async () => {
     if (!selectedRequest || isSendingMessage) {
       return;
@@ -1908,16 +1990,10 @@ export default function App() {
         onEditProfile={() => setProfileEditVisible(true)}
         onSignOut={async () => {
           await supabase?.auth.signOut();
-          setUserEmail(null);
-          setAuthUserId(null);
-          setHasTeamProfile(false);
-          setCurrentProfile(fallbackProfile);
-          setTeamProfiles([]);
-          setProfileEditVisible(false);
-          setSeenIncomingRequestIds([]);
-          setSeenApprovedRequestIds([]);
-          setSeenChatByRequest({});
+          resetToSignedOutState();
         }}
+        onDeleteAccount={confirmDeleteAccount}
+        isDeletingAccount={isDeletingAccount}
         onOpenMatch={(id) => setSelectedMatchId(id)}
         onOpenRequest={(id) => {
           if (pendingIncomingRequestIds.includes(id) && !seenIncomingRequestIdSet.has(id)) {
@@ -3226,6 +3302,8 @@ function MineScreen({
   userEmail,
   onEditProfile,
   onSignOut,
+  onDeleteAccount,
+  isDeletingAccount,
   onOpenMatch,
   onOpenRequest
 }: {
@@ -3236,6 +3314,8 @@ function MineScreen({
   userEmail: string | null;
   onEditProfile: () => void;
   onSignOut: () => void;
+  onDeleteAccount: () => void;
+  isDeletingAccount: boolean;
   onOpenMatch: (id: string) => void;
   onOpenRequest: (id: string) => void;
 }) {
@@ -3288,6 +3368,16 @@ function MineScreen({
           </Pressable>
           <Pressable style={styles.signOutButton} onPress={onSignOut}>
             <Text style={styles.signOutText}>Logg ut</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.deleteAccountButton, isDeletingAccount && styles.disabledButton]}
+            disabled={isDeletingAccount}
+            onPress={onDeleteAccount}
+          >
+            <Ionicons name="trash-outline" size={17} color={colors.red} />
+            <Text style={styles.deleteAccountText}>
+              {isDeletingAccount ? "Sletter..." : "Slett konto"}
+            </Text>
           </Pressable>
         </View>
       </View>
@@ -5246,8 +5336,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 14
   },
+  deleteAccountButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.redSoft,
+    borderColor: colors.red,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14
+  },
   signOutText: {
     color: colors.greenDark,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  deleteAccountText: {
+    color: colors.red,
     fontSize: 14,
     fontWeight: "900"
   },
