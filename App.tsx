@@ -656,7 +656,8 @@ function PlayrApp() {
       return;
     }
 
-    const shouldClear = new URLSearchParams(window.location.search).get("clearNotifications") === "1";
+    const locationSearch = typeof window.location?.search === "string" ? window.location.search : "";
+    const shouldClear = new URLSearchParams(locationSearch).get("clearNotifications") === "1";
     const saved = shouldClear ? null : readSeenNotificationCounts(currentProfile.id);
     const nextIncomingIds = saved?.incomingIds ?? [];
     const nextApprovedIds = saved?.approvedIds ?? [];
@@ -2543,12 +2544,14 @@ const deletionSections = [
 ];
 
 function getLegalPageFromPath(): "privacy" | "terms" | "deletion" | null {
-  if (typeof window === "undefined") {
+  if (typeof window === "undefined" || !window.location) {
     return null;
   }
 
-  const path = window.location.pathname.replace(/\/+$/, "").toLowerCase();
-  const href = window.location.href.toLowerCase();
+  const path = typeof window.location.pathname === "string"
+    ? window.location.pathname.replace(/\/+$/, "").toLowerCase()
+    : "";
+  const href = typeof window.location.href === "string" ? window.location.href.toLowerCase() : "";
 
   if (path === "/personvern" || href.includes("/personvern")) {
     return "privacy";
