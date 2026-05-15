@@ -1367,18 +1367,26 @@ function PlayrApp() {
       )
     );
 
+    setSelectedRequestId(null);
+    setSelectedMatchId(null);
+    setActiveTab("inbox");
+
     if (isSupabaseConfigured && supabase) {
-      await supabase.from("match_requests").update({ status: "godkjent" }).eq("id", request.id);
-      await supabase
-        .from("match_requests")
-        .update({ status: "avslatt" })
-        .eq("match_id", request.matchId)
-        .eq("status", "venter")
-        .neq("id", request.id);
-      await supabase
-        .from("matches")
-        .update({ status: "avtalt", approved_request_id: request.id })
-        .eq("id", request.matchId);
+      try {
+        await supabase.from("match_requests").update({ status: "godkjent" }).eq("id", request.id);
+        await supabase
+          .from("match_requests")
+          .update({ status: "avslatt" })
+          .eq("match_id", request.matchId)
+          .eq("status", "venter")
+          .neq("id", request.id);
+        await supabase
+          .from("matches")
+          .update({ status: "avtalt", approved_request_id: request.id })
+          .eq("id", request.matchId);
+      } catch (error) {
+        Alert.alert("Kampen ble ikke godkjent", getReadableErrorMessage(error));
+      }
     }
   };
 
@@ -2848,7 +2856,7 @@ function ProfileEditModal({
   };
 
   return (
-    <Modal visible={visible} animationType="none" presentationStyle="pageSheet">
+    <Modal visible={visible} animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -3587,7 +3595,7 @@ function MatchCard({
   const cardTitle = getMatchDisplayTitle(match, approvedRequest);
 
   return (
-    <Pressable style={[styles.matchCard, { borderColor: statusStyle.border }]} onPress={onPress}>
+    <Pressable style={[styles.matchCard, { borderColor: statusStyle.border }]} onPress={onPress} hitSlop={4}>
       <View style={styles.cardTop}>
         <View style={styles.cardText}>
           <Text style={styles.cardTitle}>{cardTitle}</Text>
@@ -3631,7 +3639,7 @@ function CreateMatchModal({
   onSubmit: () => void;
 }) {
   return (
-    <Modal visible={visible} animationType="none" presentationStyle="pageSheet">
+    <Modal visible={visible} animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -3714,7 +3722,7 @@ function EditMatchModal({
   }
 
   return (
-    <Modal visible animationType="none" presentationStyle="pageSheet">
+    <Modal visible animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -3815,7 +3823,7 @@ function MatchDetailsModal({
     isSendingRequest || match.status === "avtalt" || Boolean(myRequest && myRequest.status !== "avslatt");
 
   return (
-    <Modal visible animationType="none" presentationStyle="pageSheet">
+    <Modal visible animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <View style={styles.matchModalHeader}>
           <Pressable onPress={onClose} style={styles.closeButton}>
@@ -3967,7 +3975,7 @@ function RequestDetailsModal({
   const isEditingMessage = Boolean(editingMessageId);
 
   return (
-    <Modal visible animationType="none" presentationStyle="pageSheet">
+    <Modal visible animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Forespørsel</Text>
