@@ -439,21 +439,6 @@ export default function App() {
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
   const editingMatch = matches.find((match) => match.id === editMatchId) ?? null;
 
-  const myTeamIds = useMemo(
-    () => new Set(teamProfiles.map((profile) => profile.id)),
-    [teamProfiles]
-  );
-
-  const myHostedMatches = useMemo(
-    () => matches.filter((match) => isMatchOwnedByProfiles(match, teamProfiles)),
-    [matches, teamProfiles]
-  );
-
-  const myRequests = useMemo(
-    () => requests.filter((request) => myTeamIds.has(request.fromTeamId)),
-    [requests, myTeamIds]
-  );
-
   const selectedMatchProfile =
     selectedMatch && isMatchOwnedByProfiles(selectedMatch, teamProfiles)
       ? getProfileForMatch(selectedMatch, teamProfiles) ?? currentProfile
@@ -468,20 +453,28 @@ export default function App() {
         currentProfile
       : currentProfile;
 
-  const incomingRequests = useMemo(() => {
-    const hostedIds = new Set(myHostedMatches.map((match) => match.id));
-    return requests.filter((request) => hostedIds.has(request.matchId));
-  }, [myHostedMatches, requests]);
+  const getNotificationCountsForProfile = (profileId: string) => {
+    const hostedIds = new Set(
+      matches.filter((match) => match.hostTeamId === profileId).map((match) => match.id)
+    );
 
-  const pendingIncomingCount = useMemo(
-    () => incomingRequests.filter((request) => request.status === "venter").length,
-    [incomingRequests]
+    return {
+      incoming: requests.filter(
+        (request) => hostedIds.has(request.matchId) && request.status === "venter"
+      ).length,
+      approved: requests.filter(
+        (request) => request.fromTeamId === profileId && request.status === "godkjent"
+      ).length
+    };
+  };
+
+  const currentNotificationCounts = useMemo(
+    () => getNotificationCountsForProfile(currentProfile.id),
+    [currentProfile.id, matches, requests]
   );
 
-  const approvedMyRequestsCount = useMemo(
-    () => myRequests.filter((request) => request.status === "godkjent").length,
-    [myRequests]
-  );
+  const pendingIncomingCount = currentNotificationCounts.incoming;
+  const approvedMyRequestsCount = currentNotificationCounts.approved;
 
   const visibleIncomingNotificationCount = Math.max(pendingIncomingCount - seenIncomingCount, 0);
   const visibleApprovedNotificationCount = Math.max(approvedMyRequestsCount - seenApprovedCount, 0);
@@ -495,8 +488,9 @@ export default function App() {
     setForm(createEmptyForm(profile));
     const saved =
       typeof window === "undefined" ? null : readSeenNotificationCounts(profile.id);
-    const nextIncoming = saved ? Math.min(saved.incoming, pendingIncomingCount) : pendingIncomingCount;
-    const nextApproved = saved ? Math.min(saved.approved, approvedMyRequestsCount) : approvedMyRequestsCount;
+    const profileCounts = getNotificationCountsForProfile(profile.id);
+    const nextIncoming = saved ? Math.min(saved.incoming, profileCounts.incoming) : profileCounts.incoming;
+    const nextApproved = saved ? Math.min(saved.approved, profileCounts.approved) : profileCounts.approved;
     setSeenIncomingCount(nextIncoming);
     setSeenApprovedCount(nextApproved);
   };
