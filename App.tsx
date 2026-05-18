@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { Component, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -10,6 +10,7 @@ import {
   Platform,
   Pressable,
   PanResponder,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -287,6 +288,9 @@ const initialRequests: MatchRequest[] = [
 const initialMessages: ChatMessage[] = [
 ];
 
+const dateFormatHelpText = "Dato må være en gyldig dato. Du kan bruke f.eks. 15.06.2026, 15.06.26, 15-06-2026 eller 2026-06-15.";
+const timeFormatHelpText = "Tid må være et gyldig klokkeslett. Du kan bruke f.eks. 18:00, 18.00 eller 1800.";
+
 type SeenNotificationCounts = {
   incoming: number;
   approved: number;
@@ -528,6 +532,7 @@ function PlayrApp() {
   const [seenIncomingRequestIds, setSeenIncomingRequestIds] = useState<string[]>([]);
   const [seenApprovedRequestIds, setSeenApprovedRequestIds] = useState<string[]>([]);
   const [seenChatByRequest, setSeenChatByRequest] = useState<Record<string, number>>({});
+  const [isRefreshingData, setIsRefreshingData] = useState(false);
 
   const selectedMatch = matches.find((match) => match.id === selectedMatchId) ?? null;
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
@@ -594,6 +599,7 @@ function PlayrApp() {
       );
     });
     const matchIds = new Set<string>();
+    const requestIds: string[] = [];
     const count = involvedRequests.reduce((total, request) => {
       const opponentMessageCount = messages.filter((message) => {
         if (message.requestId !== request.id) {
@@ -610,12 +616,13 @@ function PlayrApp() {
 
       if (unread > 0) {
         matchIds.add(request.matchId);
+        requestIds.push(request.id);
       }
 
       return total + unread;
     }, 0);
 
-    return { count, matchIds };
+    return { count, matchIds, requestIds };
   };
 
   const currentNotificationCounts = useMemo(
@@ -632,6 +639,7 @@ function PlayrApp() {
     [authUserId, currentProfile.id, matches, messages, requests, seenChatByRequest, teamProfiles]
   );
   const chatMessageNotificationCount = currentChatNotifications.count;
+  const firstUnreadChatRequestId = currentChatNotifications.requestIds[0] ?? null;
 
   const seenIncomingRequestIdSet = useMemo(
     () => new Set(seenIncomingRequestIds),
@@ -649,11 +657,132 @@ function PlayrApp() {
   ).length;
   const visibleChatNotificationCount = chatMessageNotificationCount;
   const unreadChatMatchIds = currentChatNotifications.matchIds;
+  const openChatRequest = useCallback((requestId: string) => {
+    setSelectedMatchId(null);
+    setSelectedRequestId(requestId);
+  }, []);
   const openCreateMatch = () => {
     setForm({ ...createEmptyForm(currentProfile), ageGroup: getAgeGroupFormValue(currentProfile.ageGroup) });
     setCreateFeedback(null);
     setCreateVisible(true);
   };
+  const loadAppData = useCallback(
+    async ({
+      showBlockingLoader = false,
+      shouldIgnore = () => false
+    }: {
+      showBlockingLoader?: boolean;
+      shouldIgnore?: () => boolean;
+    } = {}) => {
+      if (!isSupabaseConfigured || !supabase) {
+        return;
+      }
+
+      if (!authUserId) {
+        if (showBlockingLoader) {
+          setAppDataReady(false);
+        }
+        return;
+      }
+
+      if (showBlockingLoader) {
+        setAppDataReady(false);
+      }
+
+      let { data: matchData, error: matchError } = await supabase
+        .from("matches")
+        .select(
+          "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id, teams(club, team, contact_name)"
+        )
+        .order("match_date", { ascending: true });
+
+      if (matchError) {
+        const fallbackMatches = await supabase
+          .from("matches")
+          .select(
+            "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id"
+          )
+          .order("match_date", { ascending: true });
+
+        matchData = fallbackMatches.data;
+        matchError = fallbackMatches.error;
+      }
+
+      const { data: requestData, error: requestError } = await supabase
+        .from("match_requests")
+        .select("id, match_id, from_team_id, message, status, created_at, teams(club, team)")
+        .order("created_at", { ascending: false });
+
+      const { data: messageData, error: messageError } = await supabase
+        .from("chat_messages")
+        .select("id, request_id, sender_user_id, text, created_at, users(full_name)")
+        .order("created_at", { ascending: true });
+
+      if (shouldIgnore()) {
+        return;
+      }
+
+      if (!matchError) {
+        const loadedMatches = ((matchData ?? []) as DatabaseMatchRow[]).map(mapDatabaseMatch);
+        setMatches(loadedMatches);
+      }
+
+      if (!requestError) {
+        const loadedRequests = ((requestData ?? []) as DatabaseRequestRow[]).map(mapDatabaseRequest);
+        setRequests(loadedRequests);
+      }
+
+      if (!messageError) {
+        const loadedMessages = ((messageData ?? []) as DatabaseChatMessageRow[]).map(mapDatabaseChatMessage);
+        setMessages(loadedMessages);
+      }
+
+      setAppDataReady(true);
+    },
+    [authUserId]
+  );
+  const refreshAppData = useCallback(async () => {
+    if (isRefreshingData) {
+      return;
+    }
+
+    setIsRefreshingData(true);
+    try {
+      await loadAppData();
+    } finally {
+      setIsRefreshingData(false);
+    }
+  }, [isRefreshingData, loadAppData]);
+  const markApprovedRequestsAsSeen = useCallback(() => {
+    if (!currentProfile.id || visibleApprovedNotificationCount <= 0) {
+      return;
+    }
+
+    setSeenApprovedRequestIds(approvedMyRequestIds);
+    saveSeenNotificationCounts(
+      currentProfile.id,
+      seenIncomingRequestIds.length,
+      approvedMyRequestIds.length,
+      seenChatByRequest,
+      seenIncomingRequestIds,
+      approvedMyRequestIds
+    );
+  }, [
+    approvedMyRequestIds,
+    currentProfile.id,
+    seenChatByRequest,
+    seenIncomingRequestIds,
+    visibleApprovedNotificationCount
+  ]);
+  const changeTab = useCallback(
+    (tab: Tab) => {
+      if (tab === "inbox") {
+        markApprovedRequestsAsSeen();
+      }
+      setActiveTab(tab);
+    },
+    [markApprovedRequestsAsSeen]
+  );
   const selectTeamProfile = (profile: TeamProfile) => {
     setCurrentProfile(profile);
     setForm(createEmptyForm(profile));
@@ -688,33 +817,6 @@ function PlayrApp() {
       nextApprovedIds
     );
   }, [appDataReady, currentProfile.id, pendingIncomingCount, approvedMyRequestsCount]);
-
-  useEffect(() => {
-    if (!appDataReady || !currentProfile.id) {
-      return;
-    }
-
-    if (activeTab === "inbox" && visibleApprovedNotificationCount > 0) {
-      setSeenApprovedRequestIds(approvedMyRequestIds);
-      saveSeenNotificationCounts(
-        currentProfile.id,
-        seenIncomingRequestIds.length,
-        approvedMyRequestIds.length,
-        seenChatByRequest,
-        seenIncomingRequestIds,
-        approvedMyRequestIds
-      );
-    }
-  }, [
-    activeTab,
-    appDataReady,
-    currentProfile.id,
-    approvedMyRequestIds,
-    seenIncomingRequestIds,
-    seenApprovedRequestIds,
-    visibleApprovedNotificationCount,
-    seenChatByRequest
-  ]);
 
   useEffect(() => {
     if (!currentProfile.id) {
@@ -838,75 +940,12 @@ function PlayrApp() {
   useEffect(() => {
     let ignore = false;
 
-    const loadAppData = async () => {
-      if (!isSupabaseConfigured || !supabase) {
-        return;
-      }
-
-      if (!authUserId) {
-        setAppDataReady(false);
-        return;
-      }
-
-      setAppDataReady(false);
-
-      let { data: matchData, error: matchError } = await supabase
-        .from("matches")
-        .select(
-          "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id, teams(club, team, contact_name)"
-        )
-        .order("match_date", { ascending: true });
-
-      if (matchError) {
-        const fallbackMatches = await supabase
-          .from("matches")
-          .select(
-            "id, sport, title, age_group, level, match_date, match_time, place, city, match_type, comment, status, approved_request_id, host_team_id"
-          )
-          .order("match_date", { ascending: true });
-
-        matchData = fallbackMatches.data;
-        matchError = fallbackMatches.error;
-      }
-
-      const { data: requestData, error: requestError } = await supabase
-        .from("match_requests")
-        .select("id, match_id, from_team_id, message, status, created_at, teams(club, team)")
-        .order("created_at", { ascending: false });
-
-      const { data: messageData, error: messageError } = await supabase
-        .from("chat_messages")
-        .select("id, request_id, sender_user_id, text, created_at, users(full_name)")
-        .order("created_at", { ascending: true });
-
-      if (ignore) {
-        return;
-      }
-
-      if (!matchError) {
-        const loadedMatches = ((matchData ?? []) as DatabaseMatchRow[]).map(mapDatabaseMatch);
-        setMatches(loadedMatches);
-      }
-
-      if (!requestError) {
-        const loadedRequests = ((requestData ?? []) as DatabaseRequestRow[]).map(mapDatabaseRequest);
-        setRequests(loadedRequests);
-      }
-
-      if (!messageError) {
-        const loadedMessages = ((messageData ?? []) as DatabaseChatMessageRow[]).map(mapDatabaseChatMessage);
-        setMessages(loadedMessages);
-      }
-
-      setAppDataReady(true);
-    };
-
-    loadAppData();
+    loadAppData({ showBlockingLoader: true, shouldIgnore: () => ignore });
 
     return () => {
       ignore = true;
     };
-  }, [authUserId]);
+  }, [loadAppData]);
 
   useEffect(() => {
     setMessageText("");
@@ -1003,7 +1042,7 @@ function PlayrApp() {
 
     const databaseDate = parseDateForDatabase(cleanForm.date);
     if (!databaseDate) {
-      setCreateFeedback("Dato må skrives slik: 15.06.2026.");
+      setCreateFeedback(dateFormatHelpText);
       return;
     }
 
@@ -1014,7 +1053,7 @@ function PlayrApp() {
 
     const databaseTime = parseTimeForDatabase(cleanForm.time);
     if (!databaseTime) {
-      setCreateFeedback("Tid må skrives slik: 18:00.");
+      setCreateFeedback(timeFormatHelpText);
       return;
     }
 
@@ -1118,7 +1157,7 @@ function PlayrApp() {
 
     const databaseDate = parseDateForDatabase(cleanForm.date);
     if (!databaseDate) {
-      setEditFeedback("Dato må skrives slik: 15.06.2026.");
+      setEditFeedback(dateFormatHelpText);
       return;
     }
 
@@ -1129,7 +1168,7 @@ function PlayrApp() {
 
     const databaseTime = parseTimeForDatabase(cleanForm.time);
     if (!databaseTime) {
-      setEditFeedback("Tid må skrives slik: 18:00.");
+      setEditFeedback(timeFormatHelpText);
       return;
     }
 
@@ -2022,23 +2061,20 @@ function PlayrApp() {
           pendingIncomingCount={visibleIncomingNotificationCount}
           approvedMyRequestsCount={visibleApprovedNotificationCount}
           chatMessageCount={visibleChatNotificationCount}
+          refreshing={isRefreshingData}
+          onRefresh={refreshAppData}
           onOpenInbox={() => {
-            setActiveTab("mine");
+            changeTab("mine");
           }}
           onOpenMine={() => {
-            setSeenApprovedRequestIds(approvedMyRequestIds);
-            saveSeenNotificationCounts(
-              currentProfile.id,
-              seenIncomingRequestIds.length,
-              approvedMyRequestIds.length,
-              seenChatByRequest,
-              seenIncomingRequestIds,
-              approvedMyRequestIds
-            );
-            setActiveTab("inbox");
+            changeTab("inbox");
           }}
           onOpenChatMessages={() => {
-            setActiveTab("inbox");
+            if (firstUnreadChatRequestId) {
+              openChatRequest(firstUnreadChatRequestId);
+            } else {
+              changeTab("inbox");
+            }
           }}
         />
       );
@@ -2050,6 +2086,8 @@ function PlayrApp() {
           profile={currentProfile}
           matches={matches}
           requests={requests}
+          refreshing={isRefreshingData}
+          onRefresh={refreshAppData}
           onOpenMatch={(id) => setSelectedMatchId(id)}
           onCreateMatch={openCreateMatch}
         />
@@ -2063,7 +2101,10 @@ function PlayrApp() {
           matches={matches}
           requests={requests}
           unreadChatMatchIds={unreadChatMatchIds}
+          refreshing={isRefreshingData}
+          onRefresh={refreshAppData}
           onOpenMatch={(id) => setSelectedMatchId(id)}
+          onOpenChat={openChatRequest}
         />
       );
     }
@@ -2075,6 +2116,8 @@ function PlayrApp() {
             requests={requests}
             matches={matches}
             userEmail={userEmail}
+        refreshing={isRefreshingData}
+        onRefresh={refreshAppData}
         onEditProfile={() => setProfileEditVisible(true)}
         onSignOut={async () => {
           await supabase?.auth.signOut();
@@ -2177,7 +2220,7 @@ function PlayrApp() {
         <View style={styles.content}>{renderContent()}</View>
         <BottomTabs
           activeTab={activeTab}
-          onChange={setActiveTab}
+          onChange={changeTab}
           badges={{
             inbox: visibleApprovedNotificationCount + visibleChatNotificationCount,
             mine: visibleIncomingNotificationCount
@@ -2223,14 +2266,15 @@ function PlayrApp() {
         isSendingRequest={isSendingRequest}
         isDeletingMatch={isDeletingMatch}
         isCancelingMatch={isCancelingMatch}
+        refreshing={isRefreshingData}
+        onRefresh={refreshAppData}
         onClose={() => setSelectedMatchId(null)}
         onSendRequest={sendRequest}
         onEditMatch={openEditMatch}
         onDeleteMatch={deleteMatch}
         onCancelAgreedMatch={cancelAgreedMatch}
         onOpenChat={(requestId) => {
-          setSelectedRequestId(requestId);
-          setTimeout(() => setSelectedMatchId(null), 0);
+          openChatRequest(requestId);
         }}
       />
 
@@ -2244,6 +2288,8 @@ function PlayrApp() {
         editingMessageId={editingMessageId}
         chatFeedback={chatFeedback}
         isSendingMessage={isSendingMessage}
+        refreshing={isRefreshingData}
+        onRefresh={refreshAppData}
         onMessageTextChange={setMessageText}
         onSendChatMessage={sendChatMessage}
         onEditChatMessage={startEditingChatMessage}
@@ -2251,7 +2297,10 @@ function PlayrApp() {
         onApprove={() => selectedRequest && approveRequest(selectedRequest)}
         onDecline={() => selectedRequest && declineRequest(selectedRequest)}
         onWithdraw={() => selectedRequest && withdrawRequest(selectedRequest)}
-        onClose={() => setSelectedRequestId(null)}
+        onClose={() => {
+          setSelectedRequestId(null);
+          setSelectedMatchId(null);
+        }}
       />
     </SafeAreaView>
   );
@@ -2270,6 +2319,8 @@ function Header({
   onSelectProfile: (profileId: string) => void;
   showHomeLogo: boolean;
 }) {
+  const [teamMenuOpen, setTeamMenuOpen] = useState(false);
+
   return (
     <View style={styles.header}>
       {title ? (
@@ -2281,19 +2332,49 @@ function Header({
           </Text>
           <View style={styles.headerTeamWrap}>
             {profiles.length > 1 ? (
-              <Pressable
-                style={styles.headerTeamSwitch}
-                onPress={() => {
-                  const currentIndex = profiles.findIndex((teamProfile) => teamProfile.id === profile.id);
-                  const nextProfile = profiles[(currentIndex + 1) % profiles.length];
-                  onSelectProfile(nextProfile.id);
-                }}
-              >
-                <Text style={styles.headerTeamSwitchText} numberOfLines={1}>
-                  {formatProfileTeamLine(profile)}
-                </Text>
-                <Ionicons name="chevron-down" size={16} color="#FFFFFF" />
-              </Pressable>
+              <>
+                <Pressable
+                  style={[styles.headerTeamSwitch, teamMenuOpen && styles.headerTeamSwitchOpen]}
+                  onPress={() => setTeamMenuOpen((open) => !open)}
+                >
+                  <Text style={styles.headerTeamSwitchText} numberOfLines={1}>
+                    {formatProfileTeamLine(profile)}
+                  </Text>
+                  <Ionicons
+                    name={teamMenuOpen ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color="#FFFFFF"
+                  />
+                </Pressable>
+                {teamMenuOpen ? (
+                  <View style={styles.headerTeamMenu}>
+                    {profiles.map((teamProfile) => {
+                      const selected = teamProfile.id === profile.id;
+                      return (
+                        <Pressable
+                          key={teamProfile.id}
+                          style={[styles.headerTeamMenuItem, selected && styles.headerTeamMenuItemActive]}
+                          onPress={() => {
+                            onSelectProfile(teamProfile.id);
+                            setTeamMenuOpen(false);
+                          }}
+                        >
+                          <Text
+                            style={[
+                              styles.headerTeamMenuText,
+                              selected && styles.headerTeamMenuTextActive
+                            ]}
+                            numberOfLines={1}
+                          >
+                            {formatProfileTeamLine(teamProfile)}
+                          </Text>
+                          {selected ? <Ionicons name="checkmark" size={16} color={colors.greenDark} /> : null}
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+              </>
             ) : (
               <Text style={styles.headerProfileTeam} numberOfLines={1}>
                 {formatProfileTeamLine(profile)}
@@ -2315,6 +2396,10 @@ function AuthScreen() {
   const [loading, setLoading] = useState(false);
 
   const submit = async () => {
+    if (loading) {
+      return;
+    }
+
     if (!supabase) {
       setFeedback("Supabase er ikke konfigurert.");
       return;
@@ -2361,6 +2446,29 @@ function AuthScreen() {
         </Text>
 
         <View style={styles.authForm}>
+          <View style={styles.authSegment}>
+            {([
+              { value: "login", label: "Logg inn" },
+              { value: "signup", label: "Opprett konto" }
+            ] as const).map((option) => {
+              const selected = mode === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  style={[styles.authSegmentOption, selected && styles.authSegmentOptionActive]}
+                  onPress={() => {
+                    setFeedback(null);
+                    setMode(option.value);
+                  }}
+                >
+                  <Text style={[styles.authSegmentText, selected && styles.authSegmentTextActive]}>
+                    {option.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           <Input
             label="E-post"
             value={email}
@@ -2371,6 +2479,12 @@ function AuthScreen() {
             autoCorrect={false}
             textContentType="username"
             autoComplete="email"
+            returnKeyType="next"
+            onSubmitEditing={() => {
+              if (password.length >= 6) {
+                submit();
+              }
+            }}
           />
           <Input
             label="Passord"
@@ -2382,6 +2496,8 @@ function AuthScreen() {
             textContentType="password"
             autoComplete="password"
             secureTextEntry
+            returnKeyType="done"
+            onSubmitEditing={submit}
           />
 
           {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
@@ -2392,17 +2508,6 @@ function AuthScreen() {
             </Text>
           </Pressable>
 
-          <Pressable
-            style={styles.authModeButton}
-            onPress={() => {
-              setFeedback(null);
-              setMode(mode === "login" ? "signup" : "login");
-            }}
-          >
-            <Text style={styles.authModeText}>
-              {mode === "login" ? "Ny bruker? Opprett konto" : "Har du konto? Logg inn"}
-            </Text>
-          </Pressable>
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -3013,6 +3118,8 @@ function HomeScreen({
   pendingIncomingCount,
   approvedMyRequestsCount,
   chatMessageCount,
+  refreshing,
+  onRefresh,
   onOpenInbox,
   onOpenMine,
   onOpenChatMessages
@@ -3026,6 +3133,8 @@ function HomeScreen({
   pendingIncomingCount: number;
   approvedMyRequestsCount: number;
   chatMessageCount: number;
+  refreshing: boolean;
+  onRefresh: () => void;
   onOpenInbox: () => void;
   onOpenMine: () => void;
   onOpenChatMessages: () => void;
@@ -3086,6 +3195,14 @@ function HomeScreen({
     <ScrollView
       contentContainerStyle={styles.home}
       onScroll={(event) => onHeaderLogoChange(event.nativeEvent.contentOffset.y > 36)}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.greenDark}
+          colors={[colors.greenDark]}
+        />
+      }
       scrollEventThrottle={16}
     >
       <PlayrLogo />
@@ -3195,12 +3312,16 @@ function MatchesScreen({
   profile,
   matches,
   requests,
+  refreshing,
+  onRefresh,
   onOpenMatch,
   onCreateMatch
 }: {
   profile: TeamProfile;
   matches: Match[];
   requests: MatchRequest[];
+  refreshing: boolean;
+  onRefresh: () => void;
   onOpenMatch: (id: string) => void;
   onCreateMatch: () => void;
 }) {
@@ -3322,6 +3443,14 @@ function MatchesScreen({
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.greenDark}
+            colors={[colors.greenDark]}
+          />
+        }
         ListEmptyComponent={<EmptyState text="Ingen ledige kamper med disse filtrene." />}
         renderItem={({ item }) => {
           const hasMyRequest = requests.some(
@@ -3346,13 +3475,19 @@ function AgreedMatchesScreen({
   matches,
   requests,
   unreadChatMatchIds,
-  onOpenMatch
+  refreshing,
+  onRefresh,
+  onOpenMatch,
+  onOpenChat
 }: {
   profile: TeamProfile;
   matches: Match[];
   requests: MatchRequest[];
   unreadChatMatchIds: Set<string>;
+  refreshing: boolean;
+  onRefresh: () => void;
   onOpenMatch: (id: string) => void;
+  onOpenChat: (requestId: string) => void;
 }) {
   const agreedMatches = matches.filter((match) => {
     if (match.status !== "avtalt") {
@@ -3376,6 +3511,14 @@ function AgreedMatchesScreen({
       data={agreedMatches}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.list}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.greenDark}
+          colors={[colors.greenDark]}
+        />
+      }
       ListEmptyComponent={<EmptyState text="Ingen avtalte kamper enda." />}
       renderItem={({ item }) => {
         const approvedRequest = requests.find((request) => request.id === item.approvedRequestId);
@@ -3393,6 +3536,7 @@ function AgreedMatchesScreen({
             approvedRequest={approvedRequest}
             hasUnreadChat={unreadChatMatchIds.has(item.id)}
             onPress={() => onOpenMatch(item.id)}
+            onOpenChat={approvedRequest ? () => onOpenChat(approvedRequest.id) : undefined}
           />
         );
       }}
@@ -3475,6 +3619,8 @@ function MineScreen({
   requests,
   matches,
   userEmail,
+  refreshing,
+  onRefresh,
   onEditProfile,
   onSignOut,
   onDeleteAccount,
@@ -3487,6 +3633,8 @@ function MineScreen({
   requests: MatchRequest[];
   matches: Match[];
   userEmail: string | null;
+  refreshing: boolean;
+  onRefresh: () => void;
   onEditProfile: () => void;
   onSignOut: () => void;
   onDeleteAccount: () => void;
@@ -3529,7 +3677,17 @@ function MineScreen({
   const pendingRequests = activeMyRequests.length + activeIncomingRequests.length;
 
   return (
-    <ScrollView contentContainerStyle={styles.list}>
+    <ScrollView
+      contentContainerStyle={styles.list}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.greenDark}
+          colors={[colors.greenDark]}
+        />
+      }
+    >
       <View style={styles.accountBox}>
         <Text style={styles.sectionLabel}>Innlogget konto</Text>
         <Text style={styles.accountEmail}>{userEmail ?? "Ukjent bruker"}</Text>
@@ -3638,13 +3796,15 @@ function MatchCard({
   hasMyRequest,
   approvedRequest,
   hasUnreadChat = false,
-  onPress
+  onPress,
+  onOpenChat
 }: {
   match: Match;
   hasMyRequest: boolean;
   approvedRequest?: MatchRequest;
   hasUnreadChat?: boolean;
   onPress: () => void;
+  onOpenChat?: () => void;
 }) {
   const statusStyle = getMatchStatusStyle(match.status);
   const cardTitle = getMatchDisplayTitle(match, approvedRequest);
@@ -3660,9 +3820,16 @@ function MatchCard({
             <Text style={[styles.statusText, { color: statusStyle.text }]}>{match.status}</Text>
           </View>
           {hasUnreadChat ? (
-            <View style={styles.matchChatBadge}>
+            <Pressable
+              style={styles.matchChatBadge}
+              onPress={(event) => {
+                event.stopPropagation();
+                onOpenChat?.();
+              }}
+              hitSlop={8}
+            >
               <Ionicons name="chatbubble-ellipses" size={13} color="#FFFFFF" />
-            </View>
+            </Pressable>
           ) : null}
         </View>
       </View>
@@ -3725,8 +3892,8 @@ function CreateMatchModal({
 
             <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
             <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
-            <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026" />
-            <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00" />
+            <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026 eller 15-06-26" />
+            <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00 eller 1800" />
             <Input label="Bane/sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Marienlyst stadion" />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
             <Input
@@ -3804,8 +3971,8 @@ function EditMatchModal({
             </View>
             <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
             <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
-            <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026" />
-            <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00" />
+            <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026 eller 15-06-26" />
+            <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00 eller 1800" />
             <Input label="Bane/sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Marienlyst stadion" />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
             <Input
@@ -3839,6 +4006,8 @@ function MatchDetailsModal({
   isSendingRequest,
   isDeletingMatch,
   isCancelingMatch,
+  refreshing,
+  onRefresh,
   onClose,
   onSendRequest,
   onEditMatch,
@@ -3852,6 +4021,8 @@ function MatchDetailsModal({
   isSendingRequest: boolean;
   isDeletingMatch: boolean;
   isCancelingMatch: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
   onClose: () => void;
   onSendRequest: (match: Match) => void;
   onEditMatch: (match: Match) => void;
@@ -3886,7 +4057,17 @@ function MatchDetailsModal({
           </Pressable>
         </View>
 
-        <ScrollView contentContainerStyle={styles.details}>
+        <ScrollView
+          contentContainerStyle={styles.details}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor={colors.greenDark}
+              colors={[colors.greenDark]}
+            />
+          }
+        >
           <MatchCard match={match} hasMyRequest={Boolean(myRequest)} onPress={() => undefined} />
 
           <Text style={styles.sectionTitle}>Kampinfo</Text>
@@ -3990,6 +4171,8 @@ function RequestDetailsModal({
   editingMessageId,
   chatFeedback,
   isSendingMessage,
+  refreshing,
+  onRefresh,
   onMessageTextChange,
   onSendChatMessage,
   onEditChatMessage,
@@ -4008,6 +4191,8 @@ function RequestDetailsModal({
   editingMessageId: string | null;
   chatFeedback: string | null;
   isSendingMessage: boolean;
+  refreshing: boolean;
+  onRefresh: () => void;
   onMessageTextChange: (text: string) => void;
   onSendChatMessage: () => void;
   onEditChatMessage: (message: ChatMessage) => void;
@@ -4022,7 +4207,8 @@ function RequestDetailsModal({
   }
 
   const isIncoming = match.hostTeamId === profile.id;
-  const canWithdraw = request.fromTeamId === profile.id && request.status !== "avslatt";
+  const canRespondToRequest = isIncoming && request.status === "venter";
+  const canWithdraw = request.fromTeamId === profile.id && request.status === "venter";
   const isOwnMessage = (message: ChatMessage) =>
     (authUserId ? message.senderUserId === authUserId : false) ||
     (!message.senderUserId && message.sender === profile.contactName);
@@ -4043,7 +4229,17 @@ function RequestDetailsModal({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
         >
-          <ScrollView contentContainerStyle={styles.details}>
+          <ScrollView
+            contentContainerStyle={styles.details}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.greenDark}
+                colors={[colors.greenDark]}
+              />
+            }
+          >
             <Text style={styles.cardTitle}>{match.title}</Text>
             <Text style={styles.cardMeta}>{formatTeamName(request.fromClub, request.fromTeam)}</Text>
             <RequestBadge status={request.status} />
@@ -4051,7 +4247,7 @@ function RequestDetailsModal({
             <Text style={styles.sectionTitle}>Status</Text>
             <Text style={styles.paragraph}>{getRequestText(request.status)}</Text>
 
-            {isIncoming ? (
+            {canRespondToRequest ? (
               <View style={styles.actionStack}>
                 <Pressable style={styles.primaryButtonFull} onPress={onApprove}>
                   <Text style={styles.primaryButtonText}>Godkjenn</Text>
@@ -4188,7 +4384,9 @@ function Input({
   autoCapitalize = "sentences",
   autoCorrect = true,
   textContentType,
-  autoComplete
+  autoComplete,
+  returnKeyType,
+  onSubmitEditing
 }: {
   label: string;
   value: string;
@@ -4201,6 +4399,8 @@ function Input({
   autoCorrect?: boolean;
   textContentType?: any;
   autoComplete?: any;
+  returnKeyType?: "done" | "go" | "next" | "search" | "send";
+  onSubmitEditing?: () => void;
 }) {
   return (
     <View>
@@ -4218,6 +4418,8 @@ function Input({
         autoCorrect={autoCorrect}
         textContentType={textContentType}
         autoComplete={autoComplete}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
       />
     </View>
   );
@@ -4266,31 +4468,40 @@ function AgeGroupInput({
       <Text style={styles.inputLabel}>Årskull</Text>
       <View style={styles.ageGroupRow}>
         <View style={styles.ageGroupToggle}>
-          {(["G", "J"] as const).map((option) => {
-            const selected = prefix === option;
+          {([
+            { value: "G", label: "G", suffix: "utter" },
+            { value: "J", label: "J", suffix: "enter" }
+          ] as const).map((option) => {
+            const selected = prefix === option.value;
             return (
               <Pressable
-                key={option}
+                key={option.value}
                 style={[styles.ageGroupOption, selected && styles.ageGroupOptionSelected]}
-                onPress={() => updateValue(option, birthYear)}
+                onPress={() => updateValue(option.value, birthYear)}
               >
-                <Text style={[styles.ageGroupOptionText, selected && styles.ageGroupOptionTextSelected]}>
-                  {option}
+                <Text
+                  style={[styles.ageGroupOptionText, selected && styles.ageGroupOptionTextSelected]}
+                  numberOfLines={1}
+                >
+                  {option.label}
+                  <Text style={styles.ageGroupOptionSuffix}>{option.suffix}</Text>
                 </Text>
               </Pressable>
             );
           })}
         </View>
+        <View style={styles.ageGroupDivider} />
         <TextInput
           style={[styles.ageGroupInput, !birthYear && styles.ageGroupInputEmpty]}
           value={birthYear}
           onChangeText={(text) => updateValue(prefix, text.replace(/\D/g, "").slice(0, 4))}
-          placeholder="Eks. 2014"
+          placeholder="2014"
           placeholderTextColor={colors.muted}
           keyboardType="number-pad"
           maxLength={4}
         />
       </View>
+      <Text style={styles.ageGroupHelpText}>Velg G for gutter eller J for jenter, og skriv fødselsår.</Text>
     </View>
   );
 }
@@ -4523,19 +4734,23 @@ function formatRelativeDate(value: string) {
 
 function parseDateForDatabase(value: string) {
   const trimmed = value.trim();
-  const norwegianDate = trimmed.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+  const norwegianDate = trimmed.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{2}|\d{4})$/);
   if (norwegianDate) {
     const [, day, month, year] = norwegianDate;
-    return createValidDatabaseDate(year, month, day);
+    return createValidDatabaseDate(normalizeInputYear(year), month, day);
   }
 
-  const isoDate = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const isoDate = trimmed.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})$/);
   if (isoDate) {
     const [, year, month, day] = isoDate;
     return createValidDatabaseDate(year, month, day);
   }
 
   return null;
+}
+
+function normalizeInputYear(year: string) {
+  return year.length === 2 ? `20${year}` : year;
 }
 
 function createValidDatabaseDate(year: string, month: string, day: string) {
@@ -4591,12 +4806,24 @@ function parseTimeForDatabase(value: string) {
     return null;
   }
 
-  const time = trimmed.match(/^(\d{1,2}):(\d{2})$/);
-  if (!time) {
+  const separatedTime = trimmed.match(/^(\d{1,2})[:.\-](\d{2})$/);
+  const compactTime = trimmed.match(/^(\d{1,2})(\d{2})$/);
+  const hourOnlyTime = trimmed.match(/^(\d{1,2})$/);
+
+  let hours = "";
+  let minutes = "";
+
+  if (separatedTime) {
+    [, hours, minutes] = separatedTime;
+  } else if (compactTime) {
+    [, hours, minutes] = compactTime;
+  } else if (hourOnlyTime) {
+    [, hours] = hourOnlyTime;
+    minutes = "00";
+  } else {
     return null;
   }
 
-  const [, hours, minutes] = time;
   const normalizedHours = Number(hours);
   const normalizedMinutes = Number(minutes);
 
@@ -4762,6 +4989,33 @@ const styles = StyleSheet.create({
     gap: 14,
     marginTop: 28
   },
+  authSegment: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    padding: 4
+  },
+  authSegmentOption: {
+    alignItems: "center",
+    borderRadius: 6,
+    flex: 1,
+    minHeight: 42,
+    justifyContent: "center",
+    paddingHorizontal: 10
+  },
+  authSegmentOptionActive: {
+    backgroundColor: colors.greenDark
+  },
+  authSegmentText: {
+    color: colors.greenDark,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  authSegmentTextActive: {
+    color: "#FFFFFF"
+  },
   profileTeamsBox: {
     gap: 12,
     marginTop: 4
@@ -4794,15 +5048,6 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     paddingBottom: 28
-  },
-  authModeButton: {
-    alignItems: "center",
-    paddingVertical: 12
-  },
-  authModeText: {
-    color: colors.greenDark,
-    fontSize: 15,
-    fontWeight: "900"
   },
   legalPage: {
     backgroundColor: colors.background,
@@ -4846,7 +5091,8 @@ const styles = StyleSheet.create({
     minHeight: 92,
     justifyContent: "center",
     paddingBottom: 0,
-    paddingTop: 0
+    paddingTop: 0,
+    zIndex: 10
   },
   headerTitle: {
     color: colors.black,
@@ -4885,7 +5131,8 @@ const styles = StyleSheet.create({
     maxWidth: "58%",
     position: "absolute",
     right: 0,
-    top: 0
+    top: 0,
+    zIndex: 20
   },
   headerProfileTeam: {
     color: "#FFFFFF",
@@ -4898,13 +5145,55 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 4,
     justifyContent: "flex-end",
-    paddingVertical: 2
+    paddingHorizontal: 6,
+    paddingVertical: 3
+  },
+  headerTeamSwitchOpen: {
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderRadius: 8
   },
   headerTeamSwitchText: {
     color: "#FFFFFF",
     fontSize: 17,
     fontWeight: "900",
     textAlign: "right"
+  },
+  headerTeamMenu: {
+    backgroundColor: "#FFFFFF",
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    elevation: 8,
+    minWidth: 190,
+    paddingVertical: 4,
+    position: "absolute",
+    right: 0,
+    top: 31,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    zIndex: 30
+  },
+  headerTeamMenuItem: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8,
+    justifyContent: "space-between",
+    paddingHorizontal: 10,
+    paddingVertical: 9
+  },
+  headerTeamMenuItemActive: {
+    backgroundColor: colors.greenLight
+  },
+  headerTeamMenuText: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  headerTeamMenuTextActive: {
+    color: colors.greenDark
   },
   content: {
     flex: 1
@@ -5714,18 +6003,22 @@ const styles = StyleSheet.create({
     marginTop: 4
   },
   ageGroupRow: {
-    flexDirection: "row",
-    gap: 8
-  },
-  ageGroupToggle: {
+    alignItems: "center",
     backgroundColor: colors.card,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
     flexDirection: "row",
     minHeight: 50,
+    paddingHorizontal: 8
+  },
+  ageGroupToggle: {
+    backgroundColor: colors.background,
+    borderRadius: 8,
+    flexDirection: "row",
+    height: 34,
     overflow: "hidden",
-    width: 108
+    width: 112
   },
   ageGroupOption: {
     alignItems: "center",
@@ -5733,15 +6026,25 @@ const styles = StyleSheet.create({
     justifyContent: "center"
   },
   ageGroupOptionSelected: {
-    backgroundColor: colors.cardSoft
+    backgroundColor: colors.greenLight
   },
   ageGroupOptionText: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 15,
+    fontWeight: "800"
+  },
+  ageGroupOptionSuffix: {
+    fontSize: 9,
     fontWeight: "800"
   },
   ageGroupOptionTextSelected: {
     color: colors.greenDark
+  },
+  ageGroupDivider: {
+    backgroundColor: colors.border,
+    height: 28,
+    marginHorizontal: 10,
+    width: 1
   },
   ageGroupPickerWrap: {
     backgroundColor: colors.card,
@@ -5762,20 +6065,23 @@ const styles = StyleSheet.create({
     minHeight: 50
   },
   ageGroupInput: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
-    borderRadius: 8,
-    borderWidth: 1,
+    backgroundColor: "transparent",
     color: colors.text,
-    flex: 0,
-    fontSize: 18,
+    flex: 1,
+    fontSize: 16,
     fontWeight: "700",
     minHeight: 50,
-    paddingHorizontal: 14,
-    width: 86
+    paddingHorizontal: 0
   },
   ageGroupInputEmpty: {
-    fontSize: 9
+    fontSize: 16
+  },
+  ageGroupHelpText: {
+    color: colors.muted,
+    fontSize: 10,
+    fontWeight: "700",
+    lineHeight: 14,
+    marginTop: 4
   },
   textArea: {
     minHeight: 96,
