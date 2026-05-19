@@ -296,6 +296,7 @@ type SeenNotificationCounts = {
   approved: number;
   incomingIds: string[];
   approvedIds: string[];
+  matchingMatchIds: string[];
   chatByRequest: Record<string, number>;
 };
 
@@ -318,6 +319,7 @@ const readSeenNotificationCounts = (profileId: string) => {
       approved: Number(parsed.approved) || 0,
       incomingIds: Array.isArray(parsed.incomingIds) ? (parsed.incomingIds as string[]) : [],
       approvedIds: Array.isArray(parsed.approvedIds) ? (parsed.approvedIds as string[]) : [],
+      matchingMatchIds: Array.isArray(parsed.matchingMatchIds) ? (parsed.matchingMatchIds as string[]) : [],
       chatByRequest:
         parsed.chatByRequest && typeof parsed.chatByRequest === "object"
           ? (parsed.chatByRequest as Record<string, number>)
@@ -334,9 +336,18 @@ const saveSeenNotificationCounts = (
   approved: number,
   chatByRequest: Record<string, number> = {},
   incomingIds: string[] = [],
-  approvedIds: string[] = []
+  approvedIds: string[] = [],
+  matchingMatchIds?: string[]
 ) => {
-  const payload = { incoming, approved, incomingIds, approvedIds, chatByRequest };
+  const previous = readSeenNotificationCounts(profileId);
+  const payload = {
+    incoming,
+    approved,
+    incomingIds,
+    approvedIds,
+    matchingMatchIds: matchingMatchIds ?? previous?.matchingMatchIds ?? [],
+    chatByRequest
+  };
 
   if (typeof window === "undefined" || !window.localStorage) {
     nativeSeenNotificationCounts[profileId] = payload;
@@ -531,6 +542,7 @@ function PlayrApp() {
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [seenIncomingRequestIds, setSeenIncomingRequestIds] = useState<string[]>([]);
   const [seenApprovedRequestIds, setSeenApprovedRequestIds] = useState<string[]>([]);
+  const [seenMatchingMatchIds, setSeenMatchingMatchIds] = useState<string[]>([]);
   const [seenChatByRequest, setSeenChatByRequest] = useState<Record<string, number>>({});
   const [isRefreshingData, setIsRefreshingData] = useState(false);
 
@@ -657,6 +669,32 @@ function PlayrApp() {
   ).length;
   const visibleChatNotificationCount = chatMessageNotificationCount;
   const unreadChatMatchIds = currentChatNotifications.matchIds;
+  const matchingMatchNotificationIds = useMemo(() => {
+    const ownedTeamIds = new Set(teamProfiles.map((profile) => profile.id));
+    const profileTargets = new Set(
+      teamProfiles.map(
+        (profile) => `${profile.sport}:${getAgeGroupDisplay(profile.ageGroup)}`
+      )
+    );
+
+    return matches
+      .filter((match) => {
+        const target = `${match.sport}:${getAgeGroupDisplay(match.ageGroup)}`;
+        return (
+          match.status === "ledig" &&
+          !ownedTeamIds.has(match.hostTeamId) &&
+          profileTargets.has(target)
+        );
+      })
+      .map((match) => match.id);
+  }, [matches, teamProfiles]);
+  const seenMatchingMatchIdSet = useMemo(
+    () => new Set(seenMatchingMatchIds),
+    [seenMatchingMatchIds]
+  );
+  const visibleMatchingMatchNotificationCount = matchingMatchNotificationIds.filter(
+    (matchId) => !seenMatchingMatchIdSet.has(matchId)
+  ).length;
   const openChatRequest = useCallback((requestId: string) => {
     setSelectedMatchId(null);
     setSelectedRequestId(requestId);
@@ -774,14 +812,40 @@ function PlayrApp() {
     seenIncomingRequestIds,
     visibleApprovedNotificationCount
   ]);
+  const markMatchingMatchesAsSeen = useCallback(() => {
+    if (!currentProfile.id || visibleMatchingMatchNotificationCount <= 0) {
+      return;
+    }
+
+    setSeenMatchingMatchIds(matchingMatchNotificationIds);
+    saveSeenNotificationCounts(
+      currentProfile.id,
+      seenIncomingRequestIds.length,
+      seenApprovedRequestIds.length,
+      seenChatByRequest,
+      seenIncomingRequestIds,
+      seenApprovedRequestIds,
+      matchingMatchNotificationIds
+    );
+  }, [
+    currentProfile.id,
+    matchingMatchNotificationIds,
+    seenApprovedRequestIds,
+    seenChatByRequest,
+    seenIncomingRequestIds,
+    visibleMatchingMatchNotificationCount
+  ]);
   const changeTab = useCallback(
     (tab: Tab) => {
       if (tab === "inbox") {
         markApprovedRequestsAsSeen();
       }
+      if (tab === "matches") {
+        markMatchingMatchesAsSeen();
+      }
       setActiveTab(tab);
     },
-    [markApprovedRequestsAsSeen]
+    [markApprovedRequestsAsSeen, markMatchingMatchesAsSeen]
   );
   const selectTeamProfile = (profile: TeamProfile) => {
     setCurrentProfile(profile);
@@ -790,6 +854,7 @@ function PlayrApp() {
       typeof window === "undefined" ? null : readSeenNotificationCounts(profile.id);
     setSeenIncomingRequestIds(saved?.incomingIds ?? []);
     setSeenApprovedRequestIds(saved?.approvedIds ?? []);
+    setSeenMatchingMatchIds(saved?.matchingMatchIds ?? []);
     setSeenChatByRequest(saved?.chatByRequest ?? {});
   };
 
@@ -803,10 +868,12 @@ function PlayrApp() {
     const saved = shouldClear ? null : readSeenNotificationCounts(currentProfile.id);
     const nextIncomingIds = saved?.incomingIds ?? [];
     const nextApprovedIds = saved?.approvedIds ?? [];
+    const nextMatchingMatchIds = saved?.matchingMatchIds ?? [];
     const nextChatByRequest = saved?.chatByRequest ?? {};
 
     setSeenIncomingRequestIds(nextIncomingIds);
     setSeenApprovedRequestIds(nextApprovedIds);
+    setSeenMatchingMatchIds(nextMatchingMatchIds);
     setSeenChatByRequest(nextChatByRequest);
     saveSeenNotificationCounts(
       currentProfile.id,
@@ -814,7 +881,8 @@ function PlayrApp() {
       nextApprovedIds.length,
       nextChatByRequest,
       nextIncomingIds,
-      nextApprovedIds
+      nextApprovedIds,
+      nextMatchingMatchIds
     );
   }, [appDataReady, currentProfile.id, pendingIncomingCount, approvedMyRequestsCount]);
 
@@ -825,11 +893,15 @@ function PlayrApp() {
 
     const activeIncomingIdSet = new Set(pendingIncomingRequestIds);
     const activeApprovedIdSet = new Set(approvedMyRequestIds);
+    const activeMatchingMatchIdSet = new Set(matchingMatchNotificationIds);
     const nextIncomingIds = seenIncomingRequestIds.filter((requestId) =>
       activeIncomingIdSet.has(requestId)
     );
     const nextApprovedIds = seenApprovedRequestIds.filter((requestId) =>
       activeApprovedIdSet.has(requestId)
+    );
+    const nextMatchingMatchIds = seenMatchingMatchIds.filter((matchId) =>
+      activeMatchingMatchIdSet.has(matchId)
     );
 
     if (nextIncomingIds.length !== seenIncomingRequestIds.length) {
@@ -840,9 +912,14 @@ function PlayrApp() {
       setSeenApprovedRequestIds(nextApprovedIds);
     }
 
+    if (nextMatchingMatchIds.length !== seenMatchingMatchIds.length) {
+      setSeenMatchingMatchIds(nextMatchingMatchIds);
+    }
+
     if (
       nextIncomingIds.length !== seenIncomingRequestIds.length ||
-      nextApprovedIds.length !== seenApprovedRequestIds.length
+      nextApprovedIds.length !== seenApprovedRequestIds.length ||
+      nextMatchingMatchIds.length !== seenMatchingMatchIds.length
     ) {
       saveSeenNotificationCounts(
         currentProfile.id,
@@ -850,15 +927,18 @@ function PlayrApp() {
         nextApprovedIds.length,
         seenChatByRequest,
         nextIncomingIds,
-        nextApprovedIds
+        nextApprovedIds,
+        nextMatchingMatchIds
       );
     }
   }, [
     currentProfile.id,
+    matchingMatchNotificationIds,
     pendingIncomingRequestIds,
     approvedMyRequestIds,
     seenIncomingRequestIds,
     seenApprovedRequestIds,
+    seenMatchingMatchIds,
     seenChatByRequest
   ]);
 
@@ -883,6 +963,7 @@ function PlayrApp() {
       setAuthReady(true);
       setSeenIncomingRequestIds([]);
       setSeenApprovedRequestIds([]);
+      setSeenMatchingMatchIds([]);
       setSeenChatByRequest({});
     });
 
@@ -2054,15 +2135,19 @@ function PlayrApp() {
         <HomeScreen
           profile={currentProfile}
           matches={matches}
-          onFindMatches={() => setActiveTab("matches")}
+          onFindMatches={() => changeTab("matches")}
           onCreateMatch={openCreateMatch}
           onOpenMatch={(id) => setSelectedMatchId(id)}
           onHeaderLogoChange={setHomeHeaderLogoVisible}
           pendingIncomingCount={visibleIncomingNotificationCount}
           approvedMyRequestsCount={visibleApprovedNotificationCount}
           chatMessageCount={visibleChatNotificationCount}
+          matchingMatchCount={visibleMatchingMatchNotificationCount}
           refreshing={isRefreshingData}
           onRefresh={refreshAppData}
+          onOpenMatchingMatches={() => {
+            changeTab("matches");
+          }}
           onOpenInbox={() => {
             changeTab("mine");
           }}
@@ -2216,12 +2301,14 @@ function PlayrApp() {
             }
           }}
           showHomeLogo={activeTab === "home" && homeHeaderLogoVisible}
+          showHomeVision={activeTab === "home"}
         />
         <View style={styles.content}>{renderContent()}</View>
         <BottomTabs
           activeTab={activeTab}
           onChange={changeTab}
           badges={{
+            matches: visibleMatchingMatchNotificationCount,
             inbox: visibleApprovedNotificationCount + visibleChatNotificationCount,
             mine: visibleIncomingNotificationCount
           }}
@@ -2311,13 +2398,15 @@ function Header({
   profile,
   profiles,
   onSelectProfile,
-  showHomeLogo
+  showHomeLogo,
+  showHomeVision
 }: {
   title: string;
   profile: TeamProfile;
   profiles: TeamProfile[];
   onSelectProfile: (profileId: string) => void;
   showHomeLogo: boolean;
+  showHomeVision: boolean;
 }) {
   const [teamMenuOpen, setTeamMenuOpen] = useState(false);
 
@@ -2384,6 +2473,9 @@ function Header({
         </View>
       )}
       {showHomeLogo ? <PlayrLogo compact /> : null}
+      {showHomeVision ? (
+        <Text style={styles.headerVisionText}>Flere barn med. Flere minner. Flere fellesskap.</Text>
+      ) : null}
     </View>
   );
 }
@@ -2444,6 +2536,7 @@ function AuthScreen() {
         <Text style={styles.authText}>
           Bruk e-post og passord for å logge inn i Playr.
         </Text>
+        <PlayrVision />
 
         <View style={styles.authForm}>
           <View style={styles.authSegment}>
@@ -3108,6 +3201,19 @@ function PlayrLogo({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function PlayrVision() {
+  return (
+    <View style={styles.visionBox}>
+      <Text style={styles.visionTitle}>Flere barn med. Flere minner. Flere fellesskap.</Text>
+      <Text style={styles.visionText}>
+        Playr er laget for å gjøre det enklere å skape aktivitet. På sikt ønsker vi
+        også å bidra til at flere barn og unge får mulighet til å delta, uansett
+        bakgrunn og økonomi.
+      </Text>
+    </View>
+  );
+}
+
 function HomeScreen({
   profile,
   matches,
@@ -3118,8 +3224,10 @@ function HomeScreen({
   pendingIncomingCount,
   approvedMyRequestsCount,
   chatMessageCount,
+  matchingMatchCount,
   refreshing,
   onRefresh,
+  onOpenMatchingMatches,
   onOpenInbox,
   onOpenMine,
   onOpenChatMessages
@@ -3133,8 +3241,10 @@ function HomeScreen({
   pendingIncomingCount: number;
   approvedMyRequestsCount: number;
   chatMessageCount: number;
+  matchingMatchCount: number;
   refreshing: boolean;
   onRefresh: () => void;
+  onOpenMatchingMatches: () => void;
   onOpenInbox: () => void;
   onOpenMine: () => void;
   onOpenChatMessages: () => void;
@@ -3226,8 +3336,18 @@ function HomeScreen({
         </Pressable>
       </View>
 
-      {pendingIncomingCount > 0 || approvedMyRequestsCount > 0 || chatMessageCount > 0 ? (
+      {pendingIncomingCount > 0 || approvedMyRequestsCount > 0 || chatMessageCount > 0 || matchingMatchCount > 0 ? (
         <View style={styles.notificationPanel}>
+          {matchingMatchCount > 0 ? (
+            <Pressable style={styles.notificationRow} onPress={onOpenMatchingMatches}>
+              <Ionicons name="football-outline" size={18} color={colors.green} />
+              <Text style={styles.notificationText}>
+                {matchingMatchCount === 1
+                  ? "Det er lagt ut 1 ny kamp som matcher ditt årskull."
+                  : `Det er lagt ut ${matchingMatchCount} nye kamper som matcher dine årskull.`}
+              </Text>
+            </Pressable>
+          ) : null}
           {pendingIncomingCount > 0 ? (
             <Pressable style={styles.notificationRow} onPress={onOpenInbox}>
               <Ionicons name="notifications-outline" size={18} color={colors.green} />
@@ -3264,7 +3384,7 @@ function HomeScreen({
       <View
         style={[
           styles.featuredArea,
-          (pendingIncomingCount > 0 || approvedMyRequestsCount > 0 || chatMessageCount > 0) &&
+          (pendingIncomingCount > 0 || approvedMyRequestsCount > 0 || chatMessageCount > 0 || matchingMatchCount > 0) &&
             styles.featuredAreaWithNotification
         ]}
       >
@@ -4987,7 +5107,30 @@ const styles = StyleSheet.create({
   },
   authForm: {
     gap: 14,
-    marginTop: 28
+    marginTop: 22
+  },
+  visionBox: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 6,
+    marginTop: 20,
+    padding: 14
+  },
+  visionTitle: {
+    color: colors.greenDark,
+    fontSize: 15,
+    fontWeight: "900",
+    lineHeight: 20,
+    textAlign: "center"
+  },
+  visionText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18,
+    textAlign: "center"
   },
   authSegment: {
     backgroundColor: colors.card,
@@ -5098,6 +5241,18 @@ const styles = StyleSheet.create({
     color: colors.black,
     fontSize: 22,
     fontWeight: "900",
+    textAlign: "center"
+  },
+  headerVisionText: {
+    bottom: 8,
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "800",
+    left: 22,
+    lineHeight: 15,
+    opacity: 0.94,
+    position: "absolute",
+    right: 22,
     textAlign: "center"
   },
   headerProfileText: {
