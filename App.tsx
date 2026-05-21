@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { Component, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Alert,
   ActivityIndicator,
@@ -696,8 +696,8 @@ function PlayrApp() {
     (matchId) => !seenMatchingMatchIdSet.has(matchId)
   ).length;
   const openChatRequest = useCallback((requestId: string) => {
-    setSelectedMatchId(null);
     setSelectedRequestId(requestId);
+    setTimeout(() => setSelectedMatchId(null), 80);
   }, []);
   const openCreateMatch = () => {
     setForm({ ...createEmptyForm(currentProfile), ageGroup: getAgeGroupFormValue(currentProfile.ageGroup) });
@@ -2573,11 +2573,6 @@ function AuthScreen() {
             textContentType="username"
             autoComplete="email"
             returnKeyType="next"
-            onSubmitEditing={() => {
-              if (password.length >= 6) {
-                submit();
-              }
-            }}
           />
           <Input
             label="Passord"
@@ -2590,7 +2585,6 @@ function AuthScreen() {
             autoComplete="password"
             secureTextEntry
             returnKeyType="done"
-            onSubmitEditing={submit}
           />
 
           {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
@@ -3206,9 +3200,7 @@ function PlayrVision() {
     <View style={styles.visionBox}>
       <Text style={styles.visionTitle}>Flere barn med. Flere minner. Flere fellesskap.</Text>
       <Text style={styles.visionText}>
-        Playr er laget for å gjøre det enklere å skape aktivitet. På sikt ønsker vi
-        også å bidra til at flere barn og unge får mulighet til å delta, uansett
-        bakgrunn og økonomi.
+        Playr er laget for å gjøre det enklere å skape aktivitet.
       </Text>
     </View>
   );
@@ -3928,9 +3920,21 @@ function MatchCard({
 }) {
   const statusStyle = getMatchStatusStyle(match.status);
   const cardTitle = getMatchDisplayTitle(match, approvedRequest);
+  const skipNextCardPress = useRef(false);
 
   return (
-    <Pressable style={[styles.matchCard, { borderColor: statusStyle.border }]} onPress={onPress} hitSlop={4}>
+    <Pressable
+      style={[styles.matchCard, { borderColor: statusStyle.border }]}
+      onPress={() => {
+        if (skipNextCardPress.current) {
+          skipNextCardPress.current = false;
+          return;
+        }
+
+        onPress();
+      }}
+      hitSlop={4}
+    >
       <View style={styles.cardTop}>
         <View style={styles.cardText}>
           <Text style={styles.cardTitle}>{cardTitle}</Text>
@@ -3943,6 +3947,7 @@ function MatchCard({
             <Pressable
               style={styles.matchChatBadge}
               onPress={(event) => {
+                skipNextCardPress.current = true;
                 event.stopPropagation();
                 onOpenChat?.();
               }}
