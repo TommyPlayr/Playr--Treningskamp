@@ -326,6 +326,24 @@ const getPasswordResetCodeFromUrl = () => {
   return hashParams.get("code");
 };
 
+const getPasswordResetTokensFromUrl = () => {
+  if (typeof window === "undefined" || !window.location) {
+    return null;
+  }
+
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const searchParams = new URLSearchParams(window.location.search);
+  const accessToken = hashParams.get("access_token") ?? searchParams.get("access_token");
+  const refreshToken = hashParams.get("refresh_token") ?? searchParams.get("refresh_token");
+  const type = hashParams.get("type") ?? searchParams.get("type");
+
+  if (accessToken && refreshToken && type === "recovery") {
+    return { accessToken, refreshToken };
+  }
+
+  return null;
+};
+
 const dateFormatHelpText = "Dato må være en gyldig dato. Du kan bruke f.eks. 15.06.2026, 15.06.26, 15-06-2026 eller 2026-06-15.";
 const timeFormatHelpText = "Tid må være et gyldig klokkeslett. Du kan bruke f.eks. 18:00, 18.00 eller 1800.";
 
@@ -989,9 +1007,25 @@ function PlayrApp() {
     const handleInitialSession = async () => {
       if (isPasswordResetUrl()) {
         const code = getPasswordResetCodeFromUrl();
+        const tokens = getPasswordResetTokensFromUrl();
 
         if (code) {
           const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error) {
+            setPasswordResetVisible(true);
+            setUserEmail(data.session?.user.email ?? null);
+            setAuthUserId(data.session?.user.id ?? null);
+            setAuthReady(true);
+            return;
+          }
+        }
+
+        if (tokens) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: tokens.accessToken,
+            refresh_token: tokens.refreshToken
+          });
+
           if (!error) {
             setPasswordResetVisible(true);
             setUserEmail(data.session?.user.email ?? null);
