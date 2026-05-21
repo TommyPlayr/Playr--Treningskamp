@@ -288,6 +288,16 @@ const initialRequests: MatchRequest[] = [
 const initialMessages: ChatMessage[] = [
 ];
 
+const passwordResetFallbackUrl = "https://regal-fudge-b5fc37.netlify.app/password-reset";
+
+const getPasswordResetRedirectUrl = () => {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return `${window.location.origin}/password-reset`;
+  }
+
+  return passwordResetFallbackUrl;
+};
+
 const dateFormatHelpText = "Dato må være en gyldig dato. Du kan bruke f.eks. 15.06.2026, 15.06.26, 15-06-2026 eller 2026-06-15.";
 const timeFormatHelpText = "Tid må være et gyldig klokkeslett. Du kan bruke f.eks. 18:00, 18.00 eller 1800.";
 
@@ -540,6 +550,7 @@ function PlayrApp() {
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
+  const [passwordResetVisible, setPasswordResetVisible] = useState(false);
   const [seenIncomingRequestIds, setSeenIncomingRequestIds] = useState<string[]>([]);
   const [seenApprovedRequestIds, setSeenApprovedRequestIds] = useState<string[]>([]);
   const [seenMatchingMatchIds, setSeenMatchingMatchIds] = useState<string[]>([]);
@@ -953,7 +964,11 @@ function PlayrApp() {
       setAuthReady(true);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setPasswordResetVisible(true);
+      }
+
       setUserEmail(session?.user.email ?? null);
       setAuthUserId(session?.user.id ?? null);
       setProfileReady(!session?.user);
@@ -2245,6 +2260,10 @@ function PlayrApp() {
     );
   }
 
+  if (passwordResetVisible) {
+    return <PasswordResetScreen onDone={() => setPasswordResetVisible(false)} />;
+  }
+
   if (isSupabaseConfigured && !userEmail) {
     return <AuthScreen />;
   }
@@ -2542,7 +2561,9 @@ function AuthScreen() {
     setResetLoading(true);
     setFeedback(null);
 
-    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
+    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail, {
+      redirectTo: getPasswordResetRedirectUrl()
+    });
 
     setResetLoading(false);
 
@@ -2643,6 +2664,111 @@ function AuthScreen() {
               </Pressable>
             ) : null}
 
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
+  );
+}
+
+function PasswordResetScreen({ onDone }: { onDone: () => void }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [feedback, setFeedback] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const savePassword = async () => {
+    if (saving) {
+      return;
+    }
+
+    if (!supabase) {
+      setFeedback("Supabase er ikke konfigurert.");
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setFeedback("Passordet må være minst 6 tegn.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setFeedback("Passordene er ikke like.");
+      return;
+    }
+
+    setSaving(true);
+    setFeedback(null);
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+
+    setSaving(false);
+
+    if (error) {
+      setFeedback(getReadableErrorMessage(error));
+      return;
+    }
+
+    setFeedback("Passordet er oppdatert. Du kan fortsette inn i Playr.");
+    setNewPassword("");
+    setConfirmPassword("");
+    onDone();
+  };
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <StatusBar style="dark" />
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={styles.authScreen}
+      >
+        <ScrollView
+          contentContainerStyle={styles.authContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <PlayrLogo />
+          <Text style={styles.authTitle}>Lag nytt passord</Text>
+          <Text style={styles.authText}>
+            Skriv inn et nytt passord for Playr-kontoen din.
+          </Text>
+
+          <View style={styles.authForm}>
+            <Input
+              label="Nytt passord"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              placeholder="Minst 6 tegn"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="newPassword"
+              autoComplete="password-new"
+              secureTextEntry
+              returnKeyType="next"
+            />
+            <Input
+              label="Gjenta passord"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Skriv passordet på nytt"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="newPassword"
+              autoComplete="password-new"
+              secureTextEntry
+              returnKeyType="done"
+            />
+
+            {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
+
+            <Pressable
+              style={[styles.primaryButtonFull, saving && styles.disabledButton]}
+              disabled={saving}
+              onPress={savePassword}
+            >
+              <Text style={styles.primaryButtonText}>
+                {saving ? "Lagrer..." : "Lagre nytt passord"}
+              </Text>
+            </Pressable>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
