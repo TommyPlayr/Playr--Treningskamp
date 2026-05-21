@@ -4033,6 +4033,9 @@ function MineScreen({
     .filter((match) => !ownedHostedMatches.some((hostedMatch) => hostedMatch.id === match.id));
   const myMatches = [...ownedHostedMatches, ...approvedRequestMatches];
   const agreedMyMatches = myMatches.filter((match) => match.status === "avtalt").length;
+  const completedMyMatches = myMatches.filter(
+    (match) => match.status === "avtalt" && getMatchDateSortValue(match) < Date.now()
+  ).length;
   const activeHostedMatches = ownedHostedMatches
     .filter((match) => match.status !== "avtalt")
     .sort((a, b) => getMatchDateSortValue(a) - getMatchDateSortValue(b));
@@ -4052,7 +4055,6 @@ function MineScreen({
       (a, b) =>
         getRequestMatchDateSortValue(a, matches) - getRequestMatchDateSortValue(b, matches)
     );
-  const pendingRequests = activeMyRequests.length + activeIncomingRequests.length;
   const requestTabs = [
     { key: "incoming" as const, label: "Nye", count: activeIncomingRequests.length },
     { key: "hosted" as const, label: "Kamper", count: activeHostedMatches.length },
@@ -4100,16 +4102,12 @@ function MineScreen({
 
       <View style={styles.mineStats}>
         <View style={styles.mineStatItem}>
-          <Text style={styles.mineStatNumber}>{myMatches.length}</Text>
-          <Text style={styles.mineStatLabel}>Mine</Text>
-        </View>
-        <View style={styles.mineStatItem}>
           <Text style={styles.mineStatNumber}>{agreedMyMatches}</Text>
-          <Text style={styles.mineStatLabel}>Avtalt</Text>
+          <Text style={styles.mineStatLabel}>Antall avtalte kamper</Text>
         </View>
         <View style={styles.mineStatItem}>
-          <Text style={styles.mineStatNumber}>{pendingRequests}</Text>
-          <Text style={styles.mineStatLabel}>Venter</Text>
+          <Text style={styles.mineStatNumber}>{completedMyMatches}</Text>
+          <Text style={styles.mineStatLabel}>Gjennomførte kamper</Text>
         </View>
       </View>
 
@@ -4759,8 +4757,8 @@ function BottomTabs({
 }) {
   const tabs: Array<{ key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
     { key: "home", label: "Hjem", icon: "home-outline" },
-    { key: "matches", label: "Kamper", icon: "paper-plane-outline" },
-    { key: "inbox", label: "Mine kamper", icon: "file-tray-outline" },
+    { key: "matches", label: "Ledige kamper", icon: "paper-plane-outline" },
+    { key: "inbox", label: "Avtalte kamper", icon: "file-tray-outline" },
     { key: "mine", label: "Forespørsler", icon: "person-outline" }
   ];
 
@@ -4986,10 +4984,10 @@ function getTabTitle(tab: Tab) {
     return "";
   }
   if (tab === "matches") {
-    return "Kamper";
+    return "Ledige kamper";
   }
   if (tab === "inbox") {
-    return "Mine kamper";
+    return "Avtalte kamper";
   }
   return "Forespørsler";
 }
@@ -6305,7 +6303,8 @@ const styles = StyleSheet.create({
     color: colors.muted,
     fontSize: 12,
     fontWeight: "800",
-    marginTop: 3
+    marginTop: 3,
+    textAlign: "center"
   },
   requestTabs: {
     backgroundColor: colors.cardSoft,
@@ -6906,8 +6905,10 @@ const styles = StyleSheet.create({
   },
   tabLabel: {
     color: colors.muted,
-    fontSize: 12,
-    fontWeight: "700"
+    fontSize: 11,
+    fontWeight: "700",
+    lineHeight: 13,
+    textAlign: "center"
   },
   tabLabelActive: {
     color: colors.greenDark
