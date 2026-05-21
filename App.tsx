@@ -4019,6 +4019,7 @@ function MineScreen({
   onOpenMatch: (id: string) => void;
   onOpenRequest: (id: string) => void;
 }) {
+  const [requestView, setRequestView] = useState<"incoming" | "hosted" | "sent">("incoming");
   const allProfiles = profiles.some((teamProfile) => teamProfile.id === profile.id)
     ? profiles
     : [profile, ...profiles];
@@ -4052,6 +4053,11 @@ function MineScreen({
         getRequestMatchDateSortValue(a, matches) - getRequestMatchDateSortValue(b, matches)
     );
   const pendingRequests = activeMyRequests.length + activeIncomingRequests.length;
+  const requestTabs = [
+    { key: "incoming" as const, label: "Nye", count: activeIncomingRequests.length },
+    { key: "hosted" as const, label: "Kamper", count: activeHostedMatches.length },
+    { key: "sent" as const, label: "Sendte", count: activeMyRequests.length }
+  ];
 
   return (
     <ScrollView
@@ -4107,63 +4113,85 @@ function MineScreen({
         </View>
       </View>
 
-      <View style={styles.mineSectionHeader}>
-        <Text style={styles.sectionTitle}>Forespørsler på mine kamper</Text>
-        <Text style={styles.mineSectionCount}>{activeIncomingRequests.length}</Text>
+      <View style={styles.requestTabs}>
+        {requestTabs.map((tab) => {
+          const isActive = requestView === tab.key;
+          return (
+            <Pressable
+              key={tab.key}
+              style={[styles.requestTab, isActive && styles.requestTabActive]}
+              onPress={() => setRequestView(tab.key)}
+            >
+              <Text style={[styles.requestTabText, isActive && styles.requestTabTextActive]}>
+                {tab.label}
+              </Text>
+              <View style={[styles.requestTabBadge, isActive && styles.requestTabBadgeActive]}>
+                <Text style={[styles.requestTabBadgeText, isActive && styles.requestTabBadgeTextActive]}>
+                  {tab.count}
+                </Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </View>
-      {activeIncomingRequests.length === 0 ? <EmptyState text="Ingen nye forespørsler på dine kamper." /> : null}
-      {activeIncomingRequests.map((request) => {
-        const match = matches.find((candidate) => candidate.id === request.matchId);
-        if (!match) {
-          return null;
-        }
 
-        return (
-          <MatchCard
-            key={request.id}
-            match={match}
-            hasMyRequest={false}
-            approvedRequest={undefined}
-            onPress={() => onOpenRequest(request.id)}
-          />
-        );
-      })}
+      {requestView === "incoming" ? (
+        <>
+          {activeIncomingRequests.length === 0 ? <EmptyState text="Ingen nye forespørsler på dine kamper." /> : null}
+          {activeIncomingRequests.map((request) => {
+            const match = matches.find((candidate) => candidate.id === request.matchId);
+            if (!match) {
+              return null;
+            }
 
-      <View style={styles.mineSectionHeader}>
-        <Text style={styles.sectionTitle}>Kamper jeg har lagt ut</Text>
-        <Text style={styles.mineSectionCount}>{activeHostedMatches.length}</Text>
-      </View>
-      {activeHostedMatches.length === 0 ? <EmptyState text="Du har ingen aktive kamper ute nå." /> : null}
-      {activeHostedMatches.map((match) => (
-        <MatchCard
-          key={match.id}
-          match={match}
-          hasMyRequest={false}
-          approvedRequest={requests.find((request) => request.id === match.approvedRequestId)}
-          onPress={() => onOpenMatch(match.id)}
-        />
-      ))}
+            return (
+              <MatchCard
+                key={request.id}
+                match={match}
+                hasMyRequest={false}
+                approvedRequest={undefined}
+                onPress={() => onOpenRequest(request.id)}
+              />
+            );
+          })}
+        </>
+      ) : null}
 
-      <View style={styles.mineSectionHeader}>
-        <Text style={styles.sectionTitle}>Mine forespørsler</Text>
-        <Text style={styles.mineSectionCount}>{activeMyRequests.length}</Text>
-      </View>
-      {activeMyRequests.length === 0 ? <EmptyState text="Du har ingen aktive forespørsler nå." /> : null}
-      {sortedMyRequests.map((request) => {
-        const match = matches.find((candidate) => candidate.id === request.matchId);
-        if (!match) {
-          return null;
-        }
-        return (
-          <MatchCard
-            key={request.id}
-            match={match}
-            hasMyRequest
-            approvedRequest={undefined}
-            onPress={() => onOpenRequest(request.id)}
-          />
-        );
-      })}
+      {requestView === "hosted" ? (
+        <>
+          {activeHostedMatches.length === 0 ? <EmptyState text="Du har ingen aktive kamper ute nå." /> : null}
+          {activeHostedMatches.map((match) => (
+            <MatchCard
+              key={match.id}
+              match={match}
+              hasMyRequest={false}
+              approvedRequest={requests.find((request) => request.id === match.approvedRequestId)}
+              onPress={() => onOpenMatch(match.id)}
+            />
+          ))}
+        </>
+      ) : null}
+
+      {requestView === "sent" ? (
+        <>
+          {activeMyRequests.length === 0 ? <EmptyState text="Du har ingen aktive forespørsler nå." /> : null}
+          {sortedMyRequests.map((request) => {
+            const match = matches.find((candidate) => candidate.id === request.matchId);
+            if (!match) {
+              return null;
+            }
+            return (
+              <MatchCard
+                key={request.id}
+                match={match}
+                hasMyRequest
+                approvedRequest={undefined}
+                onPress={() => onOpenRequest(request.id)}
+              />
+            );
+          })}
+        </>
+      ) : null}
     </ScrollView>
   );
 }
@@ -6278,6 +6306,56 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "800",
     marginTop: 3
+  },
+  requestTabs: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    padding: 5
+  },
+  requestTab: {
+    alignItems: "center",
+    borderRadius: 7,
+    flex: 1,
+    flexDirection: "row",
+    gap: 6,
+    justifyContent: "center",
+    minHeight: 42,
+    paddingHorizontal: 8
+  },
+  requestTabActive: {
+    backgroundColor: colors.greenDark
+  },
+  requestTabText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  requestTabTextActive: {
+    color: colors.card
+  },
+  requestTabBadge: {
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: 8,
+    justifyContent: "center",
+    minWidth: 24,
+    paddingHorizontal: 7,
+    paddingVertical: 3
+  },
+  requestTabBadgeActive: {
+    backgroundColor: colors.greenSoft
+  },
+  requestTabBadgeText: {
+    color: colors.greenDark,
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  requestTabBadgeTextActive: {
+    color: colors.greenDark
   },
   mineSectionHeader: {
     alignItems: "center",
