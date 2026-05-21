@@ -697,7 +697,7 @@ function PlayrApp() {
   ).length;
   const openChatRequest = useCallback((requestId: string) => {
     setSelectedRequestId(requestId);
-    setTimeout(() => setSelectedMatchId(null), 80);
+    setSelectedMatchId(null);
   }, []);
   const openCreateMatch = () => {
     setForm({ ...createEmptyForm(currentProfile), ageGroup: getAgeGroupFormValue(currentProfile.ageGroup) });
@@ -4341,8 +4341,7 @@ function RequestDetailsModal({
   const isEditingMessage = Boolean(editingMessageId);
 
   return (
-    <Modal visible animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
-      <SafeAreaView style={styles.modalSafe}>
+      <SafeAreaView style={[styles.modalSafe, styles.requestDetailsOverlay]}>
         <View style={styles.modalHeader}>
           <Text style={styles.modalTitle}>Forespørsel</Text>
           <Pressable onPress={onClose} style={styles.closeButton}>
@@ -4446,7 +4445,6 @@ function RequestDetailsModal({
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </Modal>
   );
 }
 
@@ -6081,6 +6079,11 @@ const styles = StyleSheet.create({
   modalSafe: {
     backgroundColor: colors.background,
     flex: 1
+  },
+  requestDetailsOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    elevation: 40,
+    zIndex: 40
   },
   modalKeyboard: {
     flex: 1
