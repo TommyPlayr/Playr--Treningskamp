@@ -419,7 +419,7 @@ const saveSeenNotificationCounts = (
 const createEmptyForm = (profile: TeamProfile) => ({
   sport: profile.sport,
   title: "",
-  ageGroup: profile.ageGroup,
+  ageGroup: getAgeGroupFormValue(profile.ageGroup),
   level: "",
   date: "",
   time: "",
@@ -432,7 +432,7 @@ const createEmptyForm = (profile: TeamProfile) => ({
 const createFormFromMatch = (match: Match) => ({
   sport: match.sport,
   title: match.title,
-  ageGroup: match.ageGroup,
+  ageGroup: getAgeGroupFormValue(match.ageGroup),
   level: match.level,
   date: match.date,
   time: match.time,
@@ -448,6 +448,8 @@ const getLevelNumber = (value: string) => {
 };
 
 const formatLevel = (value: string) => `Nivå ${getLevelNumber(value)}`;
+
+const getVisibleLevel = (value: string) => (getLevelNumber(value) ? value : "");
 
 const getAgeGroupPrefix = (value: string) => {
   const prefix = value.trim().charAt(0).toUpperCase();
@@ -476,6 +478,17 @@ const getAgeGroupDisplay = (value: string) => {
   }
 
   return digits ? `${prefix}${digits}` : value;
+};
+
+const getAgeGroupAge = (value: string) => {
+  const display = getAgeGroupDisplay(value).trim();
+  const match = display.match(/^[GJ]\s?(\d{1,2})$/i);
+  return match ? Number(match[1]) : null;
+};
+
+const shouldShowLevelInput = (value: string) => {
+  const age = getAgeGroupAge(value);
+  return age === null || age >= 10;
 };
 
 const formatAgeGroup = (value: string) => `${getAgeGroupPrefix(value)}${getAgeGroupNumber(value)}`;
@@ -757,7 +770,7 @@ function PlayrApp() {
     setSelectedMatchId(null);
   }, []);
   const openCreateMatch = () => {
-    setForm({ ...createEmptyForm(currentProfile), ageGroup: getAgeGroupFormValue(currentProfile.ageGroup) });
+    setForm(createEmptyForm(currentProfile));
     setCreateFeedback(null);
     setCreateVisible(true);
   };
@@ -1191,12 +1204,13 @@ function PlayrApp() {
     }
 
     setCreateFeedback(null);
+    const showLevelInput = shouldShowLevelInput(form.ageGroup || currentProfile.ageGroup);
 
     const cleanForm = {
       sport: form.sport,
       title: `${getAgeGroupDisplay(formatAgeGroup(form.ageGroup)) || getAgeGroupDisplay(currentProfile.ageGroup)} søker treningskamp`,
       ageGroup: formatAgeGroup(form.ageGroup),
-      level: formatLevel(form.level),
+      level: showLevelInput ? formatLevel(form.level) : "",
       date: form.date.trim(),
       time: form.time.trim(),
       place: form.place.trim(),
@@ -1208,12 +1222,16 @@ function PlayrApp() {
     if (
       !getAgeGroupPrefix(form.ageGroup) ||
       !getAgeGroupNumber(form.ageGroup) ||
-      !getLevelNumber(form.level) ||
+      (showLevelInput && !getLevelNumber(form.level)) ||
       !cleanForm.date ||
       !cleanForm.time ||
       !cleanForm.place
     ) {
-      setCreateFeedback("Fyll inn årskull, nivå, dato, tid og bane/sted før du publiserer kampen.");
+      setCreateFeedback(
+        showLevelInput
+          ? "Fyll inn årskull, nivå, dato, tid og bane/sted før du publiserer kampen."
+          : "Fyll inn årskull, dato, tid og bane/sted før du publiserer kampen."
+      );
       return;
     }
 
@@ -3695,7 +3713,6 @@ function MatchesScreen({
 }) {
   const [sportFilter, setSportFilter] = useState<Sport | "Alle">("Alle");
   const [ageFilter, setAgeFilter] = useState("Alle");
-  const [hideAgreed, setHideAgreed] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [openFilter, setOpenFilter] = useState<"sport" | "age" | null>(null);
 
@@ -3713,9 +3730,12 @@ function MatchesScreen({
 
   const filtered = matches
     .filter((match) => {
+      if (match.status !== "ledig") {
+        return false;
+      }
+
       const sportMatches = sportFilter === "Alle" || match.sport === sportFilter;
-    const ageMatches = ageFilter === "Alle" || getAgeGroupDisplay(match.ageGroup) === ageFilter;
-      const statusMatches = !hideAgreed || match.status !== "avtalt";
+      const ageMatches = ageFilter === "Alle" || getAgeGroupDisplay(match.ageGroup) === ageFilter;
       const search = searchText.trim().toLowerCase();
       const searchMatches =
         !search ||
@@ -3723,13 +3743,9 @@ function MatchesScreen({
           .join(" ")
           .toLowerCase()
           .includes(search);
-      return sportMatches && ageMatches && statusMatches && searchMatches;
+      return sportMatches && ageMatches && searchMatches;
     })
-    .sort((a, b) => {
-      const statusA = a.status === "avtalt" ? 1 : 0;
-      const statusB = b.status === "avtalt" ? 1 : 0;
-      return statusA - statusB || getMatchDateSortValue(a) - getMatchDateSortValue(b);
-    });
+    .sort((a, b) => getMatchDateSortValue(a) - getMatchDateSortValue(b));
 
   return (
     <View style={styles.screen}>
@@ -3788,13 +3804,6 @@ function MatchesScreen({
           </View>
         </Pressable>
       </Modal>
-
-      <Pressable style={styles.filterToggle} onPress={() => setHideAgreed((current) => !current)}>
-        <View style={[styles.checkbox, hideAgreed && styles.checkboxActive]}>
-          {hideAgreed ? <Ionicons name="checkmark" size={15} color="#FFFFFF" /> : null}
-        </View>
-        <Text style={styles.filterToggleText}>Skjul avtalte kamper</Text>
-      </Pressable>
 
       <View style={styles.searchBox}>
         <Ionicons name="search" size={18} color={colors.muted} />
@@ -4177,6 +4186,13 @@ function MatchCard({
   const statusStyle = getMatchStatusStyle(match.status);
   const cardTitle = getMatchDisplayTitle(match, approvedRequest);
   const skipNextCardPress = useRef(false);
+  const metaParts = [
+    formatSport(match.sport),
+    getAgeGroupDisplay(match.ageGroup),
+    getVisibleLevel(match.level),
+    `${match.date} ${match.time}`,
+    match.place
+  ].filter(Boolean);
 
   return (
     <Pressable
@@ -4216,7 +4232,7 @@ function MatchCard({
       </View>
 
       <Text style={styles.cardCompactMeta} numberOfLines={1}>
-        {formatSport(match.sport)} · {getAgeGroupDisplay(match.ageGroup)} · {match.level} · {match.date} {match.time} · {match.place}
+        {metaParts.join(" · ")}
       </Text>
     </Pressable>
   );
@@ -4241,6 +4257,8 @@ function CreateMatchModal({
   onClose: () => void;
   onSubmit: () => void;
 }) {
+  const showLevelInput = shouldShowLevelInput(form.ageGroup || profile.ageGroup);
+
   return (
     <Modal visible={visible} animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
@@ -4256,9 +4274,6 @@ function CreateMatchModal({
           </View>
 
           <ScrollView contentContainerStyle={styles.form}>
-            <ReadonlyField label="Lag" value={profile.team} />
-            <ReadonlyField label="Kontaktperson" value={profile.contactName} />
-
             <Text style={styles.inputLabel}>Idrett</Text>
             <View style={styles.pickerField}>
               <Picker
@@ -4272,7 +4287,9 @@ function CreateMatchModal({
             </View>
 
             <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
-            <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
+            {showLevelInput ? (
+              <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
+            ) : null}
             <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026 eller 15-06-26" />
             <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00 eller 1800" />
             <Input label="Bane/sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Marienlyst stadion" />
@@ -4454,7 +4471,7 @@ function MatchDetailsModal({
           <Text style={styles.sectionTitle}>Kampinfo</Text>
           <DetailRow label="Idrett" value={formatSport(match.sport)} />
           <DetailRow label="Alder" value={getAgeGroupDisplay(match.ageGroup)} />
-          <DetailRow label="Nivå" value={match.level} />
+          {getVisibleLevel(match.level) ? <DetailRow label="Nivå" value={match.level} /> : null}
           <DetailRow label="Dato" value={`${match.date} ${match.time}`} />
           <DetailRow label="Bane/sted" value={match.place} />
           <Pressable style={styles.mapButton} onPress={() => openMapForPlace(match.place)}>
@@ -4465,7 +4482,6 @@ function MatchDetailsModal({
 
           <Text style={styles.sectionTitle}>Kontakt</Text>
           <DetailRow label="Klubb" value={match.hostClub} />
-          <DetailRow label="Lag" value={match.hostTeam} />
           <DetailRow label="Kontaktperson" value={match.contactName} />
 
           <Text style={styles.sectionTitle}>Kommentar</Text>
