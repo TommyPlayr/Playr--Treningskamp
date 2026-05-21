@@ -4342,9 +4342,9 @@ function RequestDetailsModal({
 
   return (
       <SafeAreaView style={[styles.modalSafe, styles.requestDetailsOverlay]}>
-        <View style={styles.modalHeader}>
+        <View style={styles.chatModalHeader}>
           <Text style={styles.modalTitle}>Forespørsel</Text>
-          <Pressable onPress={onClose} style={styles.closeButton}>
+          <Pressable onPress={onClose} style={styles.chatCloseButton} hitSlop={12}>
             <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
         </View>
@@ -6096,6 +6096,16 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     padding: 18
   },
+  chatModalHeader: {
+    alignItems: "center",
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingBottom: 14,
+    paddingHorizontal: 18,
+    paddingTop: 28
+  },
   modalTitle: {
     color: colors.text,
     flex: 1,
@@ -6114,6 +6124,16 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: "center",
     width: 44
+  },
+  chatCloseButton: {
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 52,
+    justifyContent: "center",
+    width: 52
   },
   form: {
     gap: 14,
