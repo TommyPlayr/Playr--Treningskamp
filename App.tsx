@@ -298,6 +298,34 @@ const getPasswordResetRedirectUrl = () => {
   return passwordResetFallbackUrl;
 };
 
+const isPasswordResetUrl = () => {
+  if (typeof window === "undefined" || !window.location) {
+    return false;
+  }
+
+  const path = typeof window.location.pathname === "string"
+    ? window.location.pathname.replace(/\/+$/, "").toLowerCase()
+    : "";
+  const href = typeof window.location.href === "string" ? window.location.href.toLowerCase() : "";
+
+  return path === "/password-reset" || href.includes("/password-reset");
+};
+
+const getPasswordResetCodeFromUrl = () => {
+  if (typeof window === "undefined" || !window.location) {
+    return null;
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  const code = searchParams.get("code");
+  if (code) {
+    return code;
+  }
+
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  return hashParams.get("code");
+};
+
 const dateFormatHelpText = "Dato må være en gyldig dato. Du kan bruke f.eks. 15.06.2026, 15.06.26, 15-06-2026 eller 2026-06-15.";
 const timeFormatHelpText = "Tid må være et gyldig klokkeslett. Du kan bruke f.eks. 18:00, 18.00 eller 1800.";
 
@@ -958,11 +986,30 @@ function PlayrApp() {
       return;
     }
 
-    supabase.auth.getSession().then(({ data }) => {
+    const handleInitialSession = async () => {
+      if (isPasswordResetUrl()) {
+        const code = getPasswordResetCodeFromUrl();
+
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          if (!error) {
+            setPasswordResetVisible(true);
+            setUserEmail(data.session?.user.email ?? null);
+            setAuthUserId(data.session?.user.id ?? null);
+            setAuthReady(true);
+            return;
+          }
+        }
+      }
+
+      const { data } = await supabase.auth.getSession();
+      setPasswordResetVisible(isPasswordResetUrl() && Boolean(data.session?.user));
       setUserEmail(data.session?.user.email ?? null);
       setAuthUserId(data.session?.user.id ?? null);
       setAuthReady(true);
-    });
+    };
+
+    handleInitialSession();
 
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
