@@ -14,13 +14,72 @@ import {
   SafeAreaView,
   ScrollView,
   StyleSheet,
-  Text,
-  TextInput,
+  Text as RNText,
+  TextInput as RNTextInput,
+  type TextInputProps,
+  type TextProps,
   View
 } from "react-native";
+import {
+  OpenSans_400Regular,
+  OpenSans_600SemiBold,
+  OpenSans_700Bold,
+  OpenSans_800ExtraBold,
+  useFonts
+} from "@expo-google-fonts/open-sans";
 import { Ionicons } from "@expo/vector-icons";
 import { Picker } from "@react-native-picker/picker";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
+
+const openSansFont = {
+  regular: "OpenSans_400Regular",
+  semiBold: "OpenSans_600SemiBold",
+  bold: "OpenSans_700Bold",
+  extraBold: "OpenSans_800ExtraBold"
+};
+let openSansReady = false;
+
+function getOpenSansFamily(style: TextProps["style"] | TextInputProps["style"]) {
+  const flattened = StyleSheet.flatten(style);
+  const weight = flattened?.fontWeight;
+
+  if (weight === "900" || weight === "800") {
+    return openSansFont.extraBold;
+  }
+  if (weight === "bold" || weight === "700") {
+    return openSansFont.bold;
+  }
+  if (weight === "600") {
+    return openSansFont.semiBold;
+  }
+  return openSansFont.regular;
+}
+
+function Text({ style, ...props }: TextProps) {
+  if (!openSansReady) {
+    return <RNText {...props} style={style} />;
+  }
+
+  return (
+    <RNText
+      {...props}
+      style={[style, { fontFamily: getOpenSansFamily(style), fontWeight: "normal" }]}
+    />
+  );
+}
+
+function TextInput({ style, ...props }: TextInputProps) {
+  if (!openSansReady) {
+    return <RNTextInput {...props} style={style} />;
+  }
+
+  return (
+    <RNTextInput
+      {...props}
+      style={[style, { fontFamily: getOpenSansFamily(style), fontWeight: "normal" }]}
+    />
+  );
+}
 
 type Sport = "Fotball" | "Handball";
 type Tab = "home" | "matches" | "inbox" | "mine";
@@ -538,6 +597,13 @@ class StartupErrorBoundary extends Component<{ children: ReactNode }, StartupErr
 
 export default function App() {
   const [startupError, setStartupError] = useState<string | null>(null);
+  const [fontsLoaded] = useFonts({
+    OpenSans_400Regular,
+    OpenSans_600SemiBold,
+    OpenSans_700Bold,
+    OpenSans_800ExtraBold
+  });
+  openSansReady = fontsLoaded;
 
   useEffect(() => {
     const errorUtils = (globalThis as any).ErrorUtils;
@@ -563,6 +629,17 @@ export default function App() {
         <View style={styles.loadingScreen}>
           <Text style={styles.title}>Playr stoppet ved oppstart</Text>
           <Text style={styles.bodyText}>{startupError}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!fontsLoaded) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.loadingScreen}>
+          <ActivityIndicator color={colors.green} size="large" />
+          <Text style={styles.loadingText}>Starter Playr...</Text>
         </View>
       </SafeAreaView>
     );
