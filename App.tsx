@@ -2486,6 +2486,7 @@ function AuthScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
 
   const submit = async () => {
     if (loading) {
@@ -2522,6 +2523,37 @@ function AuthScreen() {
     }
   };
 
+  const sendPasswordReset = async () => {
+    if (resetLoading) {
+      return;
+    }
+
+    if (!supabase) {
+      setFeedback("Supabase er ikke konfigurert.");
+      return;
+    }
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setFeedback("Skriv inn e-postadressen din først.");
+      return;
+    }
+
+    setResetLoading(true);
+    setFeedback(null);
+
+    const { error } = await supabase.auth.resetPasswordForEmail(trimmedEmail);
+
+    setResetLoading(false);
+
+    if (error) {
+      setFeedback(getReadableErrorMessage(error));
+      return;
+    }
+
+    setFeedback("Vi har sendt deg en e-post med lenke for å tilbakestille passordet.");
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
@@ -2529,73 +2561,90 @@ function AuthScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.authScreen}
       >
-        <PlayrLogo />
-        <Text style={styles.authTitle}>
-          {mode === "login" ? "Logg inn som trener" : "Opprett trenerbruker"}
-        </Text>
-        <Text style={styles.authText}>
-          Bruk e-post og passord for å logge inn i Playr.
-        </Text>
-        <PlayrVision />
+        <ScrollView
+          contentContainerStyle={styles.authContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <PlayrLogo />
+          <Text style={styles.authTitle}>
+            {mode === "login" ? "Logg inn som trener" : "Opprett trenerbruker"}
+          </Text>
+          <Text style={styles.authText}>
+            Bruk e-post og passord for å logge inn i Playr.
+          </Text>
+          <PlayrVision />
 
-        <View style={styles.authForm}>
-          <View style={styles.authSegment}>
-            {([
-              { value: "login", label: "Logg inn" },
-              { value: "signup", label: "Opprett konto" }
-            ] as const).map((option) => {
-              const selected = mode === option.value;
-              return (
-                <Pressable
-                  key={option.value}
-                  style={[styles.authSegmentOption, selected && styles.authSegmentOptionActive]}
-                  onPress={() => {
-                    setFeedback(null);
-                    setMode(option.value);
-                  }}
-                >
-                  <Text style={[styles.authSegmentText, selected && styles.authSegmentTextActive]}>
-                    {option.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+          <View style={styles.authForm}>
+            <View style={styles.authSegment}>
+              {([
+                { value: "login", label: "Logg inn" },
+                { value: "signup", label: "Opprett konto" }
+              ] as const).map((option) => {
+                const selected = mode === option.value;
+                return (
+                  <Pressable
+                    key={option.value}
+                    style={[styles.authSegmentOption, selected && styles.authSegmentOptionActive]}
+                    onPress={() => {
+                      setFeedback(null);
+                      setMode(option.value);
+                    }}
+                  >
+                    <Text style={[styles.authSegmentText, selected && styles.authSegmentTextActive]}>
+                      {option.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <Input
+              label="E-post"
+              value={email}
+              onChangeText={setEmail}
+              placeholder="navn@klubb.no"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="username"
+              autoComplete="email"
+              returnKeyType="next"
+            />
+            <Input
+              label="Passord"
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Minst 6 tegn"
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="password"
+              autoComplete="password"
+              secureTextEntry
+              returnKeyType="done"
+            />
+
+            {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
+
+            <Pressable style={[styles.primaryButtonFull, loading && styles.disabledButton]} disabled={loading} onPress={submit}>
+              <Text style={styles.primaryButtonText}>
+                {loading ? "Vent..." : mode === "login" ? "Logg inn" : "Opprett bruker"}
+              </Text>
+            </Pressable>
+
+            {mode === "login" ? (
+              <Pressable
+                style={styles.forgotPasswordButton}
+                disabled={resetLoading}
+                onPress={sendPasswordReset}
+              >
+                <Text style={styles.forgotPasswordText}>
+                  {resetLoading ? "Sender e-post..." : "Glemt passord?"}
+                </Text>
+              </Pressable>
+            ) : null}
+
           </View>
-
-          <Input
-            label="E-post"
-            value={email}
-            onChangeText={setEmail}
-            placeholder="navn@klubb.no"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="username"
-            autoComplete="email"
-            returnKeyType="next"
-          />
-          <Input
-            label="Passord"
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Minst 6 tegn"
-            autoCapitalize="none"
-            autoCorrect={false}
-            textContentType="password"
-            autoComplete="password"
-            secureTextEntry
-            returnKeyType="done"
-          />
-
-          {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
-
-          <Pressable style={[styles.primaryButtonFull, loading && styles.disabledButton]} disabled={loading} onPress={submit}>
-            <Text style={styles.primaryButtonText}>
-              {loading ? "Vent..." : mode === "login" ? "Logg inn" : "Opprett bruker"}
-            </Text>
-          </Pressable>
-
-        </View>
+        </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -5090,9 +5139,13 @@ const styles = StyleSheet.create({
   },
   authScreen: {
     backgroundColor: colors.background,
-    flex: 1,
+    flex: 1
+  },
+  authContent: {
+    flexGrow: 1,
     justifyContent: "center",
-    padding: 28
+    padding: 28,
+    paddingBottom: 44
   },
   authTitle: {
     color: colors.text,
@@ -5161,6 +5214,17 @@ const styles = StyleSheet.create({
   },
   authSegmentTextActive: {
     color: "#FFFFFF"
+  },
+  forgotPasswordButton: {
+    alignItems: "center",
+    minHeight: 40,
+    justifyContent: "center",
+    paddingVertical: 6
+  },
+  forgotPasswordText: {
+    color: colors.greenDark,
+    fontSize: 14,
+    fontWeight: "900"
   },
   profileTeamsBox: {
     gap: 12,
