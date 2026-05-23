@@ -23,8 +23,6 @@ import {
 import {
   OpenSans_400Regular,
   OpenSans_600SemiBold,
-  OpenSans_700Bold,
-  OpenSans_800ExtraBold,
   useFonts
 } from "@expo-google-fonts/open-sans";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,9 +31,7 @@ import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const openSansFont = {
   regular: "OpenSans_400Regular",
-  semiBold: "OpenSans_600SemiBold",
-  bold: "OpenSans_700Bold",
-  extraBold: "OpenSans_800ExtraBold"
+  semiBold: "OpenSans_600SemiBold"
 };
 let openSansReady = false;
 
@@ -43,13 +39,13 @@ function getOpenSansFamily(style: TextProps["style"] | TextInputProps["style"]) 
   const flattened = StyleSheet.flatten(style);
   const weight = flattened?.fontWeight;
 
-  if (weight === "900" || weight === "800") {
-    return openSansFont.extraBold;
-  }
-  if (weight === "bold" || weight === "700") {
-    return openSansFont.bold;
-  }
-  if (weight === "600") {
+  if (
+    weight === "bold" ||
+    weight === "900" ||
+    weight === "800" ||
+    weight === "700" ||
+    weight === "600"
+  ) {
     return openSansFont.semiBold;
   }
   return openSansFont.regular;
@@ -599,9 +595,7 @@ export default function App() {
   const [startupError, setStartupError] = useState<string | null>(null);
   const [fontsLoaded] = useFonts({
     OpenSans_400Regular,
-    OpenSans_600SemiBold,
-    OpenSans_700Bold,
-    OpenSans_800ExtraBold
+    OpenSans_600SemiBold
   });
   openSansReady = fontsLoaded;
 
@@ -2762,6 +2756,7 @@ function AuthScreen() {
           contentContainerStyle={styles.authContent}
           keyboardShouldPersistTaps="handled"
         >
+          <FieldBackdrop variant="auth" />
           <PlayrLogo />
           <Text style={styles.authTitle}>
             {mode === "login" ? "Logg inn som trener" : "Opprett trenerbruker"}
@@ -3557,6 +3552,24 @@ function PlayrVision() {
   );
 }
 
+function FieldBackdrop({ variant = "home" }: { variant?: "home" | "auth" }) {
+  const isAuth = variant === "auth";
+
+  return (
+    <View
+      pointerEvents="none"
+      style={[styles.fieldBackdrop, isAuth ? styles.fieldBackdropAuth : styles.fieldBackdropHome]}
+    >
+      <View style={[styles.fieldCenterCircle, isAuth && styles.fieldCenterCircleAuth]} />
+      <View style={[styles.fieldHalfLine, isAuth && styles.fieldHalfLineAuth]} />
+      <View style={[styles.fieldBox, styles.fieldBoxTop, isAuth && styles.fieldBoxAuth]} />
+      <View style={[styles.fieldBox, styles.fieldBoxBottom, isAuth && styles.fieldBoxAuth]} />
+      <View style={[styles.fieldAccent, styles.fieldAccentOne]} />
+      <View style={[styles.fieldAccent, styles.fieldAccentTwo]} />
+    </View>
+  );
+}
+
 function HomeScreen({
   profile,
   matches,
@@ -3658,14 +3671,11 @@ function HomeScreen({
       }
       scrollEventThrottle={16}
     >
+      <FieldBackdrop />
       <PlayrLogo />
       <Text style={styles.heroTitle}>En enklere hverdag for trenere.</Text>
       <Text style={styles.heroText}>
         Finn og avtal treningskamper raskt og enkelt.
-      </Text>
-      <Text style={[styles.heroText, styles.heroTextSecond]}>
-        Trykk Finn kamper for å se ledige motstandere, eller Legg ut kamp for å finne
-        motstander.
       </Text>
 
       <View style={styles.homeActions}>
@@ -5471,7 +5481,8 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: "center",
     padding: 28,
-    paddingBottom: 44
+    paddingBottom: 44,
+    position: "relative"
   },
   authTitle: {
     color: colors.text,
@@ -5751,7 +5762,88 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     paddingHorizontal: 28,
     paddingTop: 20,
-    justifyContent: "flex-start"
+    justifyContent: "flex-start",
+    overflow: "hidden",
+    position: "relative"
+  },
+  fieldBackdrop: {
+    bottom: 0,
+    left: 0,
+    opacity: 0.72,
+    position: "absolute",
+    right: 0,
+    top: 0
+  },
+  fieldBackdropHome: {
+    transform: [{ rotate: "-8deg" }, { scale: 1.12 }]
+  },
+  fieldBackdropAuth: {
+    opacity: 0.58,
+    transform: [{ rotate: "8deg" }, { scale: 1.08 }]
+  },
+  fieldCenterCircle: {
+    borderColor: "rgba(90, 168, 95, 0.16)",
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 190,
+    left: "50%",
+    marginLeft: -95,
+    position: "absolute",
+    top: 88,
+    width: 190
+  },
+  fieldCenterCircleAuth: {
+    height: 230,
+    marginLeft: -115,
+    top: 86,
+    width: 230
+  },
+  fieldHalfLine: {
+    backgroundColor: "rgba(90, 168, 95, 0.14)",
+    height: 2,
+    left: -36,
+    position: "absolute",
+    right: -36,
+    top: 182
+  },
+  fieldHalfLineAuth: {
+    top: 206
+  },
+  fieldBox: {
+    borderColor: "rgba(90, 168, 95, 0.13)",
+    borderRadius: 8,
+    borderWidth: 2,
+    height: 92,
+    left: "50%",
+    marginLeft: -116,
+    position: "absolute",
+    width: 232
+  },
+  fieldBoxTop: {
+    top: -26
+  },
+  fieldBoxBottom: {
+    top: 352
+  },
+  fieldBoxAuth: {
+    height: 104,
+    marginLeft: -132,
+    width: 264
+  },
+  fieldAccent: {
+    backgroundColor: "rgba(30, 110, 59, 0.08)",
+    borderRadius: 999,
+    height: 10,
+    position: "absolute",
+    width: 10
+  },
+  fieldAccentOne: {
+    right: 44,
+    top: 118
+  },
+  fieldAccentTwo: {
+    left: 42,
+    top: 292
   },
   logoMarkWrap: {
     alignItems: "center",
@@ -5818,7 +5910,7 @@ const styles = StyleSheet.create({
   logo: {
     color: colors.black,
     fontSize: 44,
-    fontWeight: "800",
+    fontWeight: "700",
     textAlign: "center"
   },
   logoCompact: {
@@ -5827,20 +5919,19 @@ const styles = StyleSheet.create({
   heroTitle: {
     color: colors.text,
     fontSize: 22,
-    fontWeight: "800",
+    fontWeight: "600",
     lineHeight: 29,
-    marginBottom: 18,
+    marginBottom: 14,
     textAlign: "center"
   },
   heroText: {
     color: colors.greenDark,
     fontSize: 17,
+    fontWeight: "600",
     lineHeight: 25,
     marginTop: 0,
+    marginBottom: 6,
     textAlign: "center"
-  },
-  heroTextSecond: {
-    marginTop: 12
   },
   homeActions: {
     flexDirection: "row",
