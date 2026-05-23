@@ -3558,17 +3558,16 @@ function FieldBackdrop({ variant = "home" }: { variant?: "home" | "auth" }) {
   return (
     <View
       pointerEvents="none"
-      style={[styles.connectionBackdrop, isAuth ? styles.connectionBackdropAuth : styles.connectionBackdropHome]}
+      style={[styles.motionBackdrop, isAuth ? styles.motionBackdropAuth : styles.motionBackdropHome]}
     >
-      <View style={[styles.connectionLine, styles.connectionLineOne]} />
-      <View style={[styles.connectionLine, styles.connectionLineTwo]} />
-      <View style={[styles.connectionLine, styles.connectionLineThree]} />
-      <View style={[styles.connectionNode, styles.connectionNodePrimary, styles.connectionNodeOne]} />
-      <View style={[styles.connectionNode, styles.connectionNodeTwo]} />
-      <View style={[styles.connectionNode, styles.connectionNodeThree]} />
-      <View style={[styles.connectionNode, styles.connectionNodeFour]} />
-      <View style={[styles.connectionRing, styles.connectionRingOne]} />
-      <View style={[styles.connectionRing, styles.connectionRingTwo]} />
+      <View style={[styles.motionRibbon, styles.motionRibbonOne]} />
+      <View style={[styles.motionRibbon, styles.motionRibbonTwo]} />
+      <View style={[styles.motionRibbon, styles.motionRibbonThree]} />
+      <View style={[styles.motionDash, styles.motionDashOne]} />
+      <View style={[styles.motionDash, styles.motionDashTwo]} />
+      <View style={[styles.motionDash, styles.motionDashThree]} />
+      <View style={[styles.motionSpark, styles.motionSparkOne]} />
+      <View style={[styles.motionSpark, styles.motionSparkTwo]} />
     </View>
   );
 }
@@ -5769,89 +5768,83 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "relative"
   },
-  connectionBackdrop: {
+  motionBackdrop: {
     bottom: 0,
     left: 0,
-    opacity: 0.72,
+    opacity: 0.66,
     position: "absolute",
     right: 0,
     top: 0
   },
-  connectionBackdropHome: {
-    transform: [{ rotate: "-5deg" }, { scale: 1.08 }]
+  motionBackdropHome: {
+    transform: [{ rotate: "-4deg" }, { scale: 1.08 }]
   },
-  connectionBackdropAuth: {
-    opacity: 0.58,
-    transform: [{ rotate: "5deg" }, { scale: 1.08 }]
+  motionBackdropAuth: {
+    opacity: 0.54,
+    transform: [{ rotate: "4deg" }, { scale: 1.08 }]
   },
-  connectionLine: {
-    backgroundColor: "rgba(90, 168, 95, 0.13)",
-    height: 2,
-    position: "absolute"
-  },
-  connectionLineOne: {
-    left: 42,
-    top: 126,
-    transform: [{ rotate: "23deg" }],
-    width: 176
-  },
-  connectionLineTwo: {
-    right: 28,
-    top: 214,
-    transform: [{ rotate: "-18deg" }],
-    width: 190
-  },
-  connectionLineThree: {
-    left: 62,
-    top: 328,
-    transform: [{ rotate: "11deg" }],
-    width: 248
-  },
-  connectionNode: {
-    backgroundColor: "rgba(90, 168, 95, 0.16)",
-    borderColor: "rgba(30, 110, 59, 0.18)",
-    borderRadius: 999,
-    borderWidth: 1,
-    height: 16,
-    position: "absolute",
-    width: 16
-  },
-  connectionNodePrimary: {
-    backgroundColor: "rgba(90, 168, 95, 0.22)",
-    height: 22,
-    width: 22
-  },
-  connectionNodeOne: {
-    left: 42,
-    top: 104
-  },
-  connectionNodeTwo: {
-    right: 54,
-    top: 166
-  },
-  connectionNodeThree: {
-    left: 84,
-    top: 304
-  },
-  connectionNodeFour: {
-    right: 72,
-    top: 358
-  },
-  connectionRing: {
-    borderColor: "rgba(90, 168, 95, 0.12)",
+  motionRibbon: {
+    borderColor: "rgba(90, 168, 95, 0.16)",
     borderRadius: 999,
     borderWidth: 2,
-    height: 138,
+    height: 76,
     position: "absolute",
-    width: 138
+    width: 260
   },
-  connectionRingOne: {
-    right: -54,
-    top: 46
+  motionRibbonOne: {
+    left: -72,
+    top: 58,
+    transform: [{ rotate: "-18deg" }]
   },
-  connectionRingTwo: {
-    left: -62,
-    top: 258
+  motionRibbonTwo: {
+    right: -86,
+    top: 198,
+    transform: [{ rotate: "17deg" }]
+  },
+  motionRibbonThree: {
+    left: 42,
+    top: 358,
+    transform: [{ rotate: "-10deg" }],
+    width: 210
+  },
+  motionDash: {
+    backgroundColor: "rgba(30, 110, 59, 0.12)",
+    borderRadius: 999,
+    height: 5,
+    position: "absolute"
+  },
+  motionDashOne: {
+    right: 58,
+    top: 126,
+    transform: [{ rotate: "-22deg" }],
+    width: 74
+  },
+  motionDashTwo: {
+    left: 48,
+    top: 252,
+    transform: [{ rotate: "16deg" }],
+    width: 54
+  },
+  motionDashThree: {
+    right: 86,
+    top: 340,
+    transform: [{ rotate: "-10deg" }],
+    width: 92
+  },
+  motionSpark: {
+    backgroundColor: "rgba(90, 168, 95, 0.16)",
+    borderRadius: 999,
+    height: 12,
+    position: "absolute",
+    width: 12
+  },
+  motionSparkOne: {
+    left: 72,
+    top: 138
+  },
+  motionSparkTwo: {
+    right: 54,
+    top: 284
   },
   logoMarkWrap: {
     alignItems: "center",
