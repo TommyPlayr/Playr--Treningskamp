@@ -82,6 +82,7 @@ type Tab = "home" | "matches" | "inbox" | "mine";
 type TabBadges = Partial<Record<Tab, number>>;
 type MatchStatus = "ledig" | "avtalt";
 type RequestStatus = "venter" | "godkjent" | "avslatt";
+type ThemeMode = "light" | "dark";
 
 type TeamProfile = {
   id: string;
@@ -203,7 +204,7 @@ type DatabaseTeamRow = {
     | null;
 };
 
-const colors = {
+const lightColors = {
   background: "#F8FBF7",
   card: "#FFFFFF",
   cardSoft: "#EFF8EF",
@@ -213,9 +214,44 @@ const colors = {
   green: "#2EAA4F",
   greenDark: "#126B31",
   greenLight: "#BFEBC8",
-  red: "#D94B48",
-  redSoft: "#FFE8E7",
+  red: "#9B6A64",
+  redSoft: "#F4EBE8",
   black: "#101510"
+};
+
+const darkColors: typeof lightColors = {
+  background: "#07110B",
+  card: "#101C14",
+  cardSoft: "#17281D",
+  border: "#294332",
+  text: "#F2F8F1",
+  muted: "#A5B6A8",
+  green: "#2EAA4F",
+  greenDark: "#8DE3A0",
+  greenLight: "#254F32",
+  red: "#A57B72",
+  redSoft: "#241B18",
+  black: "#F2F8F1"
+};
+
+let colors = lightColors;
+let nativeThemeMode: ThemeMode = "light";
+
+const readThemeMode = (): ThemeMode => {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return nativeThemeMode;
+  }
+
+  const saved = window.localStorage.getItem("playr-theme-mode");
+  return saved === "dark" ? "dark" : "light";
+};
+
+const saveThemeMode = (mode: ThemeMode) => {
+  nativeThemeMode = mode;
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.setItem("playr-theme-mode", mode);
+  }
 };
 
 const fallbackProfile: TeamProfile = {
@@ -593,11 +629,22 @@ class StartupErrorBoundary extends Component<{ children: ReactNode }, StartupErr
 
 export default function App() {
   const [startupError, setStartupError] = useState<string | null>(null);
+  const [themeMode, setThemeMode] = useState<ThemeMode>(readThemeMode);
   const [fontsLoaded] = useFonts({
     OpenSans_400Regular,
     OpenSans_600SemiBold
   });
   openSansReady = fontsLoaded;
+  colors = themeMode === "dark" ? darkColors : lightColors;
+  styles = createStyles(colors);
+
+  const toggleThemeMode = useCallback(() => {
+    setThemeMode((current) => {
+      const next = current === "dark" ? "light" : "dark";
+      saveThemeMode(next);
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     const errorUtils = (globalThis as any).ErrorUtils;
@@ -641,12 +688,18 @@ export default function App() {
 
   return (
     <StartupErrorBoundary>
-      <PlayrApp />
+      <PlayrApp themeMode={themeMode} onToggleTheme={toggleThemeMode} />
     </StartupErrorBoundary>
   );
 }
 
-function PlayrApp() {
+function PlayrApp({
+  themeMode,
+  onToggleTheme
+}: {
+  themeMode: ThemeMode;
+  onToggleTheme: () => void;
+}) {
   const legalPage = getLegalPageFromPath();
   const [activeTab, setActiveTab] = useState<Tab>("home");
   const [matches, setMatches] = useState<Match[]>(isSupabaseConfigured ? [] : initialMatches);
@@ -2393,6 +2446,8 @@ function PlayrApp() {
           await supabase?.auth.signOut();
           resetToSignedOutState();
         }}
+        themeMode={themeMode}
+        onToggleTheme={onToggleTheme}
         onDeleteAccount={confirmDeleteAccount}
         isDeletingAccount={isDeletingAccount}
         onOpenMatch={(id) => setSelectedMatchId(id)}
@@ -2779,7 +2834,7 @@ function AuthScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={colors.background === darkColors.background ? "light" : "dark"} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.authScreen}
@@ -2920,7 +2975,7 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={colors.background === darkColors.background ? "light" : "dark"} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.authScreen}
@@ -3249,7 +3304,7 @@ function TeamProfileScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <StatusBar style="dark" />
+      <StatusBar style={colors.background === darkColors.background ? "light" : "dark"} />
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.authScreen}
@@ -4122,6 +4177,8 @@ function MineScreen({
   onRefresh,
   onEditProfile,
   onSignOut,
+  themeMode,
+  onToggleTheme,
   onDeleteAccount,
   isDeletingAccount,
   onOpenMatch,
@@ -4136,6 +4193,8 @@ function MineScreen({
   onRefresh: () => void;
   onEditProfile: () => void;
   onSignOut: () => void;
+  themeMode: ThemeMode;
+  onToggleTheme: () => void;
   onDeleteAccount: () => void;
   isDeletingAccount: boolean;
   onOpenMatch: (id: string) => void;
@@ -4208,6 +4267,16 @@ function MineScreen({
           </Pressable>
           <Pressable style={styles.signOutButton} onPress={onSignOut}>
             <Text style={styles.signOutText}>Logg ut</Text>
+          </Pressable>
+          <Pressable style={styles.themeButton} onPress={onToggleTheme}>
+            <Ionicons
+              name={themeMode === "dark" ? "sunny-outline" : "moon-outline"}
+              size={17}
+              color={colors.greenDark}
+            />
+            <Text style={styles.signOutText}>
+              {themeMode === "dark" ? "Lys modus" : "Mørk modus"}
+            </Text>
           </Pressable>
           <Pressable
             style={[styles.deleteAccountButton, isDeletingAccount && styles.disabledButton]}
@@ -5083,7 +5152,10 @@ function RequestBadge({ status }: { status: RequestStatus }) {
     status === "avslatt"
       ? { backgroundColor: colors.redSoft, color: colors.red }
       : status === "godkjent"
-        ? { backgroundColor: colors.greenDark, color: "#FFFFFF" }
+        ? {
+            backgroundColor: colors.greenDark,
+            color: colors.background === darkColors.background ? colors.background : "#FFFFFF"
+          }
         : { backgroundColor: colors.greenLight, color: colors.greenDark };
 
   return (
@@ -5394,7 +5466,7 @@ function getMatchStatusStyle(status: MatchStatus) {
     return {
       background: colors.greenDark,
       border: colors.greenDark,
-      text: "#FFFFFF"
+      text: colors.background === darkColors.background ? colors.background : "#FFFFFF"
     };
   }
 
@@ -5487,7 +5559,10 @@ function getRequestText(status: RequestStatus) {
   return "Forespørselen venter på svar. Kampen vises fortsatt som ledig i markedet.";
 }
 
-const styles = StyleSheet.create({
+let styles = createStyles(colors);
+
+function createStyles(colors: typeof lightColors) {
+  return StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: colors.greenDark
@@ -5822,7 +5897,7 @@ const styles = StyleSheet.create({
     textAlign: "right"
   },
   headerTeamMenu: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: colors.card,
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 1,
@@ -6412,6 +6487,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginTop: 4
   },
+  cardCompactMeta: {
+    color: colors.text,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6
+  },
   cardDetails: {
     gap: 6,
     marginTop: 10
@@ -6687,6 +6768,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14
   },
   editProfileButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14
+  },
+  themeButton: {
     alignItems: "center",
     alignSelf: "flex-start",
     backgroundColor: colors.cardSoft,
@@ -7212,4 +7306,5 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: colors.greenDark
   }
-});
+  });
+}
