@@ -234,8 +234,8 @@ const darkColors: typeof lightColors = {
   black: "#F2F8F1"
 };
 
-let colors = lightColors;
-let nativeThemeMode: ThemeMode = "light";
+let colors = darkColors;
+let nativeThemeMode: ThemeMode = "dark";
 
 const readThemeMode = (): ThemeMode => {
   if (typeof window === "undefined" || !window.localStorage) {
@@ -243,7 +243,7 @@ const readThemeMode = (): ThemeMode => {
   }
 
   const saved = window.localStorage.getItem("playr-theme-mode");
-  return saved === "dark" ? "dark" : "light";
+  return saved === "light" ? "light" : "dark";
 };
 
 const saveThemeMode = (mode: ThemeMode) => {
