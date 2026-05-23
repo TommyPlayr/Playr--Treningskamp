@@ -2618,7 +2618,12 @@ function Header({
         </>
       ) : null}
       {title ? (
-        <Text style={styles.headerTitle}>{title}</Text>
+        <View style={styles.headerTitleBlock}>
+          <Text style={styles.headerTitle}>{title}</Text>
+          <Text style={styles.headerContextText} numberOfLines={1}>
+            {formatProfileTeamLine(profile)} · {formatSport(profile.sport)}
+          </Text>
+        </View>
       ) : (
         <View style={styles.headerProfileWrap}>
           <View style={styles.headerGreetingWrap}>
@@ -2684,10 +2689,6 @@ function Header({
               <Text style={styles.headerStatusText}>
                 {notificationCount === 1 ? "1 varsel" : `${notificationCount} varsler`}
               </Text>
-            </View>
-            <View style={styles.headerStatusChip}>
-              <Ionicons name="shirt-outline" size={13} color="#FFFFFF" />
-              <Text style={styles.headerStatusText}>{getAgeGroupDisplay(profile.ageGroup)}</Text>
             </View>
           </View>
         </View>
@@ -5712,10 +5713,21 @@ const styles = StyleSheet.create({
     bottom: 26,
     left: 38
   },
+  headerTitleBlock: {
+    alignItems: "center",
+    gap: 4
+  },
   headerTitle: {
     color: colors.black,
     fontSize: 22,
     fontWeight: "900",
+    textAlign: "center"
+  },
+  headerContextText: {
+    color: "rgba(12, 27, 20, 0.72)",
+    fontSize: 12,
+    fontWeight: "700",
+    maxWidth: "92%",
     textAlign: "center"
   },
   headerVisionText: {
