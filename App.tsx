@@ -3558,14 +3558,17 @@ function FieldBackdrop({ variant = "home" }: { variant?: "home" | "auth" }) {
   return (
     <View
       pointerEvents="none"
-      style={[styles.fieldBackdrop, isAuth ? styles.fieldBackdropAuth : styles.fieldBackdropHome]}
+      style={[styles.connectionBackdrop, isAuth ? styles.connectionBackdropAuth : styles.connectionBackdropHome]}
     >
-      <View style={[styles.fieldCenterCircle, isAuth && styles.fieldCenterCircleAuth]} />
-      <View style={[styles.fieldHalfLine, isAuth && styles.fieldHalfLineAuth]} />
-      <View style={[styles.fieldBox, styles.fieldBoxTop, isAuth && styles.fieldBoxAuth]} />
-      <View style={[styles.fieldBox, styles.fieldBoxBottom, isAuth && styles.fieldBoxAuth]} />
-      <View style={[styles.fieldAccent, styles.fieldAccentOne]} />
-      <View style={[styles.fieldAccent, styles.fieldAccentTwo]} />
+      <View style={[styles.connectionLine, styles.connectionLineOne]} />
+      <View style={[styles.connectionLine, styles.connectionLineTwo]} />
+      <View style={[styles.connectionLine, styles.connectionLineThree]} />
+      <View style={[styles.connectionNode, styles.connectionNodePrimary, styles.connectionNodeOne]} />
+      <View style={[styles.connectionNode, styles.connectionNodeTwo]} />
+      <View style={[styles.connectionNode, styles.connectionNodeThree]} />
+      <View style={[styles.connectionNode, styles.connectionNodeFour]} />
+      <View style={[styles.connectionRing, styles.connectionRingOne]} />
+      <View style={[styles.connectionRing, styles.connectionRingTwo]} />
     </View>
   );
 }
@@ -5766,7 +5769,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "relative"
   },
-  fieldBackdrop: {
+  connectionBackdrop: {
     bottom: 0,
     left: 0,
     opacity: 0.72,
@@ -5774,76 +5777,81 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0
   },
-  fieldBackdropHome: {
-    transform: [{ rotate: "-8deg" }, { scale: 1.12 }]
+  connectionBackdropHome: {
+    transform: [{ rotate: "-5deg" }, { scale: 1.08 }]
   },
-  fieldBackdropAuth: {
+  connectionBackdropAuth: {
     opacity: 0.58,
-    transform: [{ rotate: "8deg" }, { scale: 1.08 }]
+    transform: [{ rotate: "5deg" }, { scale: 1.08 }]
   },
-  fieldCenterCircle: {
-    borderColor: "rgba(90, 168, 95, 0.16)",
-    borderRadius: 999,
-    borderWidth: 2,
-    height: 190,
-    left: "50%",
-    marginLeft: -95,
-    position: "absolute",
-    top: 88,
+  connectionLine: {
+    backgroundColor: "rgba(90, 168, 95, 0.13)",
+    height: 2,
+    position: "absolute"
+  },
+  connectionLineOne: {
+    left: 42,
+    top: 126,
+    transform: [{ rotate: "23deg" }],
+    width: 176
+  },
+  connectionLineTwo: {
+    right: 28,
+    top: 214,
+    transform: [{ rotate: "-18deg" }],
     width: 190
   },
-  fieldCenterCircleAuth: {
-    height: 230,
-    marginLeft: -115,
-    top: 86,
-    width: 230
+  connectionLineThree: {
+    left: 62,
+    top: 328,
+    transform: [{ rotate: "11deg" }],
+    width: 248
   },
-  fieldHalfLine: {
-    backgroundColor: "rgba(90, 168, 95, 0.14)",
-    height: 2,
-    left: -36,
-    position: "absolute",
-    right: -36,
-    top: 182
-  },
-  fieldHalfLineAuth: {
-    top: 206
-  },
-  fieldBox: {
-    borderColor: "rgba(90, 168, 95, 0.13)",
-    borderRadius: 8,
-    borderWidth: 2,
-    height: 92,
-    left: "50%",
-    marginLeft: -116,
-    position: "absolute",
-    width: 232
-  },
-  fieldBoxTop: {
-    top: -26
-  },
-  fieldBoxBottom: {
-    top: 352
-  },
-  fieldBoxAuth: {
-    height: 104,
-    marginLeft: -132,
-    width: 264
-  },
-  fieldAccent: {
-    backgroundColor: "rgba(30, 110, 59, 0.08)",
+  connectionNode: {
+    backgroundColor: "rgba(90, 168, 95, 0.16)",
+    borderColor: "rgba(30, 110, 59, 0.18)",
     borderRadius: 999,
-    height: 10,
+    borderWidth: 1,
+    height: 16,
     position: "absolute",
-    width: 10
+    width: 16
   },
-  fieldAccentOne: {
-    right: 44,
-    top: 118
+  connectionNodePrimary: {
+    backgroundColor: "rgba(90, 168, 95, 0.22)",
+    height: 22,
+    width: 22
   },
-  fieldAccentTwo: {
+  connectionNodeOne: {
     left: 42,
-    top: 292
+    top: 104
+  },
+  connectionNodeTwo: {
+    right: 54,
+    top: 166
+  },
+  connectionNodeThree: {
+    left: 84,
+    top: 304
+  },
+  connectionNodeFour: {
+    right: 72,
+    top: 358
+  },
+  connectionRing: {
+    borderColor: "rgba(90, 168, 95, 0.12)",
+    borderRadius: 999,
+    borderWidth: 2,
+    height: 138,
+    position: "absolute",
+    width: 138
+  },
+  connectionRingOne: {
+    right: -54,
+    top: 46
+  },
+  connectionRingTwo: {
+    left: -62,
+    top: 258
   },
   logoMarkWrap: {
     alignItems: "center",
