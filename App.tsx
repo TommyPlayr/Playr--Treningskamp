@@ -2756,8 +2756,8 @@ function AuthScreen() {
           contentContainerStyle={styles.authContent}
           keyboardShouldPersistTaps="handled"
         >
-          <FieldBackdrop variant="auth" />
           <PlayrLogo />
+          <PlayrPattern variant="auth" />
           <Text style={styles.authTitle}>
             {mode === "login" ? "Logg inn som trener" : "Opprett trenerbruker"}
           </Text>
@@ -3552,22 +3552,23 @@ function PlayrVision() {
   );
 }
 
-function FieldBackdrop({ variant = "home" }: { variant?: "home" | "auth" }) {
+function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
   const isAuth = variant === "auth";
 
   return (
     <View
       pointerEvents="none"
-      style={[styles.motionBackdrop, isAuth ? styles.motionBackdropAuth : styles.motionBackdropHome]}
+      style={[styles.playrPattern, isAuth ? styles.playrPatternAuth : styles.playrPatternHome]}
     >
-      <View style={[styles.motionRibbon, styles.motionRibbonOne]} />
-      <View style={[styles.motionRibbon, styles.motionRibbonTwo]} />
-      <View style={[styles.motionRibbon, styles.motionRibbonThree]} />
-      <View style={[styles.motionDash, styles.motionDashOne]} />
-      <View style={[styles.motionDash, styles.motionDashTwo]} />
-      <View style={[styles.motionDash, styles.motionDashThree]} />
-      <View style={[styles.motionSpark, styles.motionSparkOne]} />
-      <View style={[styles.motionSpark, styles.motionSparkTwo]} />
+      <View style={[styles.patternLogoArc, styles.patternLogoArcOne]} />
+      <View style={[styles.patternLogoArc, styles.patternLogoArcTwo]} />
+      <View style={[styles.patternLogoDot, styles.patternLogoDotOne]} />
+      <View style={[styles.patternLogoDot, styles.patternLogoDotTwo]} />
+      <View style={[styles.patternMatchMarker, styles.patternMatchMarkerOne]} />
+      <View style={[styles.patternMatchMarker, styles.patternMatchMarkerTwo]} />
+      <View style={[styles.patternMatchMarker, styles.patternMatchMarkerThree]} />
+      <View style={[styles.patternMatchLine, styles.patternMatchLineOne]} />
+      <View style={[styles.patternMatchLine, styles.patternMatchLineTwo]} />
     </View>
   );
 }
@@ -3673,7 +3674,7 @@ function HomeScreen({
       }
       scrollEventThrottle={16}
     >
-      <FieldBackdrop />
+      <PlayrPattern />
       <PlayrLogo />
       <Text style={styles.heroTitle}>En enklere hverdag for trenere.</Text>
       <Text style={styles.heroText}>
@@ -5768,83 +5769,88 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     position: "relative"
   },
-  motionBackdrop: {
+  playrPattern: {
     bottom: 0,
     left: 0,
-    opacity: 0.66,
+    opacity: 0.72,
     position: "absolute",
     right: 0,
     top: 0
   },
-  motionBackdropHome: {
-    transform: [{ rotate: "-4deg" }, { scale: 1.08 }]
+  playrPatternHome: {
+    transform: [{ rotate: "-7deg" }, { scale: 1.08 }]
   },
-  motionBackdropAuth: {
-    opacity: 0.54,
-    transform: [{ rotate: "4deg" }, { scale: 1.08 }]
+  playrPatternAuth: {
+    opacity: 0.58,
+    transform: [{ rotate: "6deg" }, { scale: 1.06 }]
   },
-  motionRibbon: {
-    borderColor: "rgba(90, 168, 95, 0.16)",
+  patternLogoArc: {
+    borderColor: "rgba(90, 168, 95, 0.13)",
     borderRadius: 999,
-    borderWidth: 2,
-    height: 76,
+    borderWidth: 10,
+    height: 168,
     position: "absolute",
-    width: 260
+    width: 270
   },
-  motionRibbonOne: {
-    left: -72,
-    top: 58,
-    transform: [{ rotate: "-18deg" }]
+  patternLogoArcOne: {
+    right: -126,
+    top: 54
   },
-  motionRibbonTwo: {
-    right: -86,
-    top: 198,
-    transform: [{ rotate: "17deg" }]
+  patternLogoArcTwo: {
+    bottom: 18,
+    left: -132
   },
-  motionRibbonThree: {
-    left: 42,
-    top: 358,
-    transform: [{ rotate: "-10deg" }],
-    width: 210
-  },
-  motionDash: {
-    backgroundColor: "rgba(30, 110, 59, 0.12)",
+  patternLogoDot: {
+    backgroundColor: "rgba(12, 27, 20, 0.07)",
     borderRadius: 999,
-    height: 5,
-    position: "absolute"
-  },
-  motionDashOne: {
-    right: 58,
-    top: 126,
-    transform: [{ rotate: "-22deg" }],
-    width: 74
-  },
-  motionDashTwo: {
-    left: 48,
-    top: 252,
-    transform: [{ rotate: "16deg" }],
-    width: 54
-  },
-  motionDashThree: {
-    right: 86,
-    top: 340,
-    transform: [{ rotate: "-10deg" }],
-    width: 92
-  },
-  motionSpark: {
-    backgroundColor: "rgba(90, 168, 95, 0.16)",
-    borderRadius: 999,
-    height: 12,
+    height: 24,
     position: "absolute",
-    width: 12
+    width: 24
   },
-  motionSparkOne: {
-    left: 72,
-    top: 138
-  },
-  motionSparkTwo: {
+  patternLogoDotOne: {
     right: 54,
-    top: 284
+    top: 86
+  },
+  patternLogoDotTwo: {
+    bottom: 72,
+    left: 48
+  },
+  patternMatchMarker: {
+    backgroundColor: "rgba(255, 255, 255, 0.78)",
+    borderColor: "rgba(90, 168, 95, 0.24)",
+    borderRadius: 8,
+    borderWidth: 1,
+    height: 24,
+    position: "absolute",
+    width: 42
+  },
+  patternMatchMarkerOne: {
+    left: 38,
+    top: 142
+  },
+  patternMatchMarkerTwo: {
+    right: 42,
+    top: 256
+  },
+  patternMatchMarkerThree: {
+    bottom: 114,
+    left: "46%"
+  },
+  patternMatchLine: {
+    backgroundColor: "rgba(30, 110, 59, 0.08)",
+    height: 3,
+    position: "absolute",
+    width: 130
+  },
+  patternMatchLineOne: {
+    left: 58,
+    top: 178,
+    transform: [{ rotate: "18deg" }]
+  },
+  patternMatchLineTwo: {
+    right: 66,
+    top: 286,
+    transform: [{ rotate: "-16deg" }]
   },
   logoMarkWrap: {
     alignItems: "center",
