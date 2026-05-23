@@ -2483,6 +2483,12 @@ function PlayrApp() {
           title={getTabTitle(activeTab)}
           profile={currentProfile}
           profiles={teamProfiles}
+          notificationCount={
+            visibleIncomingNotificationCount +
+            visibleApprovedNotificationCount +
+            visibleChatNotificationCount +
+            visibleMatchingMatchNotificationCount
+          }
           onSelectProfile={(profileId) => {
             const profile = teamProfiles.find((teamProfile) => teamProfile.id === profileId);
             if (profile) {
@@ -2586,6 +2592,7 @@ function Header({
   title,
   profile,
   profiles,
+  notificationCount,
   onSelectProfile,
   showHomeLogo,
   showHomeVision
@@ -2593,6 +2600,7 @@ function Header({
   title: string;
   profile: TeamProfile;
   profiles: TeamProfile[];
+  notificationCount: number;
   onSelectProfile: (profileId: string) => void;
   showHomeLogo: boolean;
   showHomeVision: boolean;
@@ -2600,14 +2608,25 @@ function Header({
   const [teamMenuOpen, setTeamMenuOpen] = useState(false);
 
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, showHomeVision && styles.headerHome]}>
+      {showHomeVision ? (
+        <>
+          <View style={[styles.headerPatternArc, styles.headerPatternArcOne]} />
+          <View style={[styles.headerPatternArc, styles.headerPatternArcTwo]} />
+          <View style={[styles.headerPatternDot, styles.headerPatternDotOne]} />
+          <View style={[styles.headerPatternDot, styles.headerPatternDotTwo]} />
+        </>
+      ) : null}
       {title ? (
         <Text style={styles.headerTitle}>{title}</Text>
       ) : (
         <View style={styles.headerProfileWrap}>
-          <Text style={styles.headerProfileName} numberOfLines={1}>
-            {profile.contactName}
-          </Text>
+          <View style={styles.headerGreetingWrap}>
+            <Text style={styles.headerGreetingEyebrow}>Hei</Text>
+            <Text style={styles.headerProfileName} numberOfLines={1}>
+              {profile.contactName}
+            </Text>
+          </View>
           <View style={styles.headerTeamWrap}>
             {profiles.length > 1 ? (
               <>
@@ -2658,6 +2677,18 @@ function Header({
                 {formatProfileTeamLine(profile)}
               </Text>
             )}
+          </View>
+          <View style={styles.headerStatusRow}>
+            <View style={styles.headerStatusChip}>
+              <Ionicons name="notifications-outline" size={13} color="#FFFFFF" />
+              <Text style={styles.headerStatusText}>
+                {notificationCount === 1 ? "1 varsel" : `${notificationCount} varsler`}
+              </Text>
+            </View>
+            <View style={styles.headerStatusChip}>
+              <Ionicons name="shirt-outline" size={13} color="#FFFFFF" />
+              <Text style={styles.headerStatusText}>{getAgeGroupDisplay(profile.ageGroup)}</Text>
+            </View>
           </View>
         </View>
       )}
@@ -5640,9 +5671,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: 22,
     minHeight: 92,
     justifyContent: "center",
+    overflow: "visible",
     paddingBottom: 0,
     paddingTop: 0,
     zIndex: 10
+  },
+  headerHome: {
+    minHeight: 112
+  },
+  headerPatternArc: {
+    borderColor: "rgba(255, 255, 255, 0.14)",
+    borderRadius: 999,
+    borderWidth: 8,
+    height: 92,
+    position: "absolute",
+    width: 156
+  },
+  headerPatternArcOne: {
+    right: -58,
+    top: 10,
+    transform: [{ rotate: "-12deg" }]
+  },
+  headerPatternArcTwo: {
+    bottom: -50,
+    left: -54,
+    transform: [{ rotate: "12deg" }]
+  },
+  headerPatternDot: {
+    backgroundColor: "rgba(12, 27, 20, 0.1)",
+    borderRadius: 999,
+    height: 14,
+    position: "absolute",
+    width: 14
+  },
+  headerPatternDotOne: {
+    right: 34,
+    top: 22
+  },
+  headerPatternDotTwo: {
+    bottom: 26,
+    left: 38
   },
   headerTitle: {
     color: colors.black,
@@ -5653,8 +5721,8 @@ const styles = StyleSheet.create({
   headerVisionText: {
     bottom: 8,
     color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "800",
+    fontSize: 13,
+    fontWeight: "700",
     left: 22,
     lineHeight: 15,
     opacity: 0.94,
@@ -5676,17 +5744,26 @@ const styles = StyleSheet.create({
     left: 22,
     position: "absolute",
     right: 22,
-    top: 8,
-    minHeight: 30
+    top: 10,
+    minHeight: 76
+  },
+  headerGreetingWrap: {
+    left: 0,
+    maxWidth: "43%",
+    position: "absolute",
+    top: 0
+  },
+  headerGreetingEyebrow: {
+    color: "rgba(255, 255, 255, 0.82)",
+    fontSize: 11,
+    fontWeight: "600",
+    lineHeight: 13
   },
   headerProfileName: {
     color: "#FFFFFF",
-    fontSize: 12,
+    fontSize: 16,
     fontWeight: "700",
-    left: 0,
-    maxWidth: "44%",
-    position: "absolute",
-    top: 0
+    lineHeight: 20
   },
   headerTeamWrap: {
     alignItems: "flex-end",
@@ -5697,27 +5774,39 @@ const styles = StyleSheet.create({
     zIndex: 20
   },
   headerProfileTeam: {
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 999,
+    borderWidth: 1,
     color: "#FFFFFF",
-    fontSize: 13,
-    fontWeight: "800",
+    fontSize: 14,
+    fontWeight: "700",
+    minHeight: 30,
+    overflow: "hidden",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     textAlign: "right"
   },
   headerTeamSwitch: {
     alignItems: "center",
+    backgroundColor: "rgba(255, 255, 255, 0.14)",
+    borderColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 999,
+    borderWidth: 1,
     flexDirection: "row",
     gap: 4,
     justifyContent: "flex-end",
-    paddingHorizontal: 6,
-    paddingVertical: 3
+    minHeight: 30,
+    paddingHorizontal: 10,
+    paddingVertical: 4
   },
   headerTeamSwitchOpen: {
-    backgroundColor: "rgba(255, 255, 255, 0.14)",
-    borderRadius: 8
+    backgroundColor: "rgba(255, 255, 255, 0.22)"
   },
   headerTeamSwitchText: {
     color: "#FFFFFF",
-    fontSize: 17,
-    fontWeight: "900",
+    fontSize: 14,
+    fontWeight: "700",
     textAlign: "right"
   },
   headerTeamMenu: {
@@ -5736,6 +5825,29 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.16,
     shadowRadius: 14,
     zIndex: 30
+  },
+  headerStatusRow: {
+    bottom: 18,
+    flexDirection: "row",
+    gap: 8,
+    left: 0,
+    position: "absolute"
+  },
+  headerStatusChip: {
+    alignItems: "center",
+    backgroundColor: "rgba(12, 27, 20, 0.13)",
+    borderColor: "rgba(255, 255, 255, 0.18)",
+    borderRadius: 999,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 5,
+    minHeight: 26,
+    paddingHorizontal: 9
+  },
+  headerStatusText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700"
   },
   headerTeamMenuItem: {
     alignItems: "center",
