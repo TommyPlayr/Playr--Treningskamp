@@ -3831,7 +3831,6 @@ function HomeScreen({
             styles.featuredAreaWithNotification
         ]}
       >
-        <Text style={styles.featuredTitle}>Kamper i nærheten</Text>
         {activeMatch ? (
           <View style={styles.featuredCard} {...featuredSwipe.panHandlers}>
             <Pressable style={styles.featuredCardButton} onPress={() => onOpenMatch(activeMatch.id)}>
@@ -6150,13 +6149,6 @@ function createStyles(colors: typeof lightColors) {
   },
   featuredAreaWithNotification: {
     marginTop: 44
-  },
-  featuredTitle: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: "900",
-    marginBottom: 32,
-    textAlign: "center"
   },
   featuredCard: {
     backgroundColor: colors.card,
