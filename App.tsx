@@ -1899,7 +1899,7 @@ function PlayrApp({
       id: authUserId,
       full_name: profile.contactName,
       email: profile.email,
-      phone: profile.phone.trim() || null
+      phone: normalizePhoneForOtp(profile.phone)
     });
 
     if (userError) {
@@ -3081,7 +3081,7 @@ const privacySections = [
   {
     title: "3. Hvorfor opplysningene brukes",
     body: [
-      "Opplysningene brukes for å opprette konto og lagprofil, vise relevante kamper, sende og behandle forespørsler, vise kontaktinformasjon mellom involverte lag og la lag chatte om avtalte kamper."
+      "Opplysningene brukes for å opprette konto og lagprofil, bekrefte telefonnummer, vise relevante kamper, sende og behandle forespørsler, vise kontaktinformasjon mellom involverte lag og la lag chatte om avtalte kamper."
     ]
   },
   {
@@ -3244,8 +3244,78 @@ function TeamProfileScreen({
   const [team, setTeam] = useState("");
   const [ageGroup, setAgeGroup] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [verifiedPhone, setVerifiedPhone] = useState("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
+  const [verifyingPhone, setVerifyingPhone] = useState(false);
+  const normalizedPhone = normalizePhoneForOtp(phone);
+  const phoneIsVerified = Boolean(normalizedPhone && verifiedPhone === normalizedPhone);
+
+  const sendPhoneCode = async () => {
+    if (!supabase) {
+      setFeedback("Supabase er ikke konfigurert.");
+      return;
+    }
+
+    if (!normalizedPhone) {
+      setFeedback("Skriv inn et gyldig telefonnummer. Norske nummer kan skrives som 900 00 000.");
+      return;
+    }
+
+    setSendingPhoneCode(true);
+    setFeedback(null);
+
+    const { error } = await supabase.auth.updateUser({ phone: normalizedPhone });
+
+    setSendingPhoneCode(false);
+
+    if (error) {
+      setFeedback(getReadableErrorMessage(error, "Vi klarte ikke å sende SMS-kode akkurat nå."));
+      return;
+    }
+
+    setVerifiedPhone("");
+    setPhoneCode("");
+    setFeedback(`Vi har sendt en bekreftelseskode til ${normalizedPhone}.`);
+  };
+
+  const verifyPhoneCode = async () => {
+    if (!supabase) {
+      setFeedback("Supabase er ikke konfigurert.");
+      return;
+    }
+
+    if (!normalizedPhone) {
+      setFeedback("Skriv inn et gyldig telefonnummer først.");
+      return;
+    }
+
+    if (!phoneCode.trim()) {
+      setFeedback("Skriv inn koden du fikk på SMS.");
+      return;
+    }
+
+    setVerifyingPhone(true);
+    setFeedback(null);
+
+    const { error } = await supabase.auth.verifyOtp({
+      phone: normalizedPhone,
+      token: phoneCode.trim(),
+      type: "phone_change"
+    });
+
+    setVerifyingPhone(false);
+
+    if (error) {
+      setFeedback(getReadableErrorMessage(error, "Koden stemmer ikke. Prøv igjen."));
+      return;
+    }
+
+    setVerifiedPhone(normalizedPhone);
+    setFeedback("Telefonnummeret er bekreftet. Nå kan du lagre lagprofilen.");
+  };
 
   const saveProfile = async () => {
     if (!supabase) {
@@ -3258,6 +3328,16 @@ function TeamProfileScreen({
       return;
     }
 
+    if (!normalizedPhone) {
+      setFeedback("Telefonnummer er obligatorisk. Skriv inn et gyldig telefonnummer.");
+      return;
+    }
+
+    if (!phoneIsVerified) {
+      setFeedback("Bekreft telefonnummeret med SMS-koden før du lagrer lagprofilen.");
+      return;
+    }
+
     setSaving(true);
     setFeedback(null);
 
@@ -3265,7 +3345,7 @@ function TeamProfileScreen({
       id: authUserId,
       full_name: contactName.trim(),
       email,
-      phone: phone.trim() || null
+      phone: normalizedPhone
     };
 
     const { error: userError } = await supabase.from("users").upsert(userPayload);
@@ -3309,7 +3389,7 @@ function TeamProfileScreen({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
         style={styles.authScreen}
       >
-        <ScrollView contentContainerStyle={styles.profileSetupContent}>
+        <ScrollView contentContainerStyle={styles.profileSetupContent} keyboardShouldPersistTaps="handled">
           <PlayrLogo />
           <Text style={styles.authTitle}>Opprett lagprofil</Text>
           <Text style={styles.authText}>
@@ -3340,16 +3420,73 @@ function TeamProfileScreen({
             />
             <AgeGroupInput value={ageGroup} onChangeText={setAgeGroup} />
             <Input
-              label="Telefon (valgfritt)"
+              label="Telefon"
               value={phone}
-              onChangeText={setPhone}
+              onChangeText={(value) => {
+                setPhone(value);
+                setVerifiedPhone("");
+              }}
               placeholder="Eks: 900 00 000"
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoComplete="tel"
             />
+            <View style={styles.phoneVerificationBox}>
+              <View style={styles.phoneVerificationHeader}>
+                <Ionicons
+                  name={phoneIsVerified ? "checkmark-circle-outline" : "shield-checkmark-outline"}
+                  size={18}
+                  color={phoneIsVerified ? colors.greenDark : colors.muted}
+                />
+                <Text style={styles.phoneVerificationText}>
+                  {phoneIsVerified
+                    ? "Telefonnummeret er bekreftet."
+                    : "Bekreft telefonnummeret før profilen aktiveres."}
+                </Text>
+              </View>
+              <Pressable
+                style={[
+                  styles.secondaryButtonFull,
+                  (sendingPhoneCode || !normalizedPhone) && styles.disabledButton
+                ]}
+                disabled={sendingPhoneCode || !normalizedPhone}
+                onPress={sendPhoneCode}
+              >
+                <Text style={styles.secondaryButtonText}>
+                  {sendingPhoneCode ? "Sender kode..." : "Send SMS-kode"}
+                </Text>
+              </Pressable>
+              <Input
+                label="SMS-kode"
+                value={phoneCode}
+                onChangeText={setPhoneCode}
+                placeholder="6-sifret kode"
+                keyboardType="number-pad"
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
+              />
+              <Pressable
+                style={[
+                  styles.secondaryButtonFull,
+                  (verifyingPhone || !normalizedPhone || !phoneCode.trim()) && styles.disabledButton
+                ]}
+                disabled={verifyingPhone || !normalizedPhone || !phoneCode.trim()}
+                onPress={verifyPhoneCode}
+              >
+                <Text style={styles.secondaryButtonText}>
+                  {verifyingPhone ? "Bekrefter..." : "Bekreft telefon"}
+                </Text>
+              </Pressable>
+            </View>
             <ReadonlyField label="E-post" value={email} />
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
-            <Pressable style={[styles.primaryButtonFull, saving && styles.disabledButton]} disabled={saving} onPress={saveProfile}>
+            <Pressable
+              style={[styles.primaryButtonFull, (saving || !phoneIsVerified) && styles.disabledButton]}
+              disabled={saving || !phoneIsVerified}
+              onPress={saveProfile}
+            >
               <Text style={styles.primaryButtonText}>
                 {saving ? "Lagrer..." : "Lagre lagprofil"}
               </Text>
@@ -3414,6 +3551,11 @@ function ProfileEditModal({
       return;
     }
 
+    if (!normalizePhoneForOtp(phone)) {
+      setFeedback("Telefonnummer er obligatorisk. Skriv inn et gyldig telefonnummer.");
+      return;
+    }
+
     setSaving(true);
     setFeedback(null);
 
@@ -3425,7 +3567,7 @@ function ProfileEditModal({
         club: team.trim(),
         team: team.trim(),
         ageGroup: formatAgeGroup(ageGroup),
-        phone: phone.trim()
+        phone: normalizePhoneForOtp(phone)
       });
     } catch (error) {
       setFeedback(getReadableErrorMessage(error, "Profilen kunne ikke lagres."));
@@ -3540,10 +3682,13 @@ function ProfileEditModal({
             />
             <AgeGroupInput value={ageGroup} onChangeText={setAgeGroup} />
             <Input
-              label="Telefon (valgfritt)"
+              label="Telefon"
               value={phone}
               onChangeText={setPhone}
               placeholder="Eks: 900 00 000"
+              keyboardType="phone-pad"
+              textContentType="telephoneNumber"
+              autoComplete="tel"
             />
             <ReadonlyField label="E-post" value={profile.email} />
 
@@ -5229,6 +5374,27 @@ function getMatchDisplayTitle(match: Match, approvedRequest?: MatchRequest) {
 
   const opponentName = formatTeamName(approvedRequest.fromClub, approvedRequest.fromTeam);
   return `${hostName} - ${opponentName}`;
+}
+
+function normalizePhoneForOtp(value: string) {
+  const compact = value.replace(/[\s().-]/g, "");
+
+  if (!compact) {
+    return "";
+  }
+
+  const withCountryCode =
+    compact.startsWith("+")
+      ? compact
+      : compact.startsWith("00")
+        ? `+${compact.slice(2)}`
+        : compact.length === 8
+          ? `+47${compact}`
+          : compact.startsWith("47") && compact.length === 10
+            ? `+${compact}`
+            : "";
+
+  return /^\+[1-9]\d{7,14}$/.test(withCountryCode) ? withCountryCode : "";
 }
 
 function replaceRequest(requests: MatchRequest[], temporaryId: string, savedRequest: MatchRequest) {
@@ -7051,6 +7217,26 @@ function createStyles(colors: typeof lightColors) {
     borderRadius: 8,
     borderWidth: 1,
     overflow: "hidden"
+  },
+  phoneVerificationBox: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 12,
+    padding: 12
+  },
+  phoneVerificationHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 8
+  },
+  phoneVerificationText: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 13,
+    fontWeight: "700",
+    lineHeight: 18
   },
   formPicker: {
     backgroundColor: colors.card,
