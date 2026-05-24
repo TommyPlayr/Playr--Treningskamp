@@ -409,7 +409,7 @@ const shouldStartSignedOutForWebReview = () => {
   }
 
   const searchParams = new URLSearchParams(window.location.search);
-  return searchParams.get("logout") === "1" || searchParams.get("start") === "login";
+  return Platform.OS === "web" || searchParams.get("logout") === "1" || searchParams.get("start") === "login";
 };
 
 const getPasswordResetCodeFromUrl = () => {
