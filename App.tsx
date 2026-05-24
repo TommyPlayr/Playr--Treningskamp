@@ -3287,6 +3287,51 @@ function TeamProfileScreen({
     saveStoredPhoneVerification(authUserId, phoneValue);
   };
 
+  const callPhoneVerification = async (action: "send" | "verify") => {
+    if (!supabase) {
+      return { error: "Supabase er ikke konfigurert." };
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      return { error: "Du må være innlogget for å bekrefte telefonnummer." };
+    }
+
+    const { data, error } = await supabase.functions.invoke("phone-verification", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: {
+        action,
+        phone: normalizedPhone,
+        code: action === "verify" ? phoneCode.trim() : undefined
+      }
+    });
+
+    if (error) {
+      const context = (error as { context?: unknown }).context;
+
+      if (context instanceof Response) {
+        const details = (await context.json().catch(() => null)) as { error?: unknown; message?: unknown } | null;
+        const detailMessage = details?.error ?? details?.message;
+
+        if (typeof detailMessage === "string" && detailMessage.trim()) {
+          return { error: detailMessage };
+        }
+      }
+
+      return { error: getReadableErrorMessage(error) };
+    }
+
+    if (data?.error) {
+      return { error: String(data.error) };
+    }
+
+    return { error: null };
+  };
+
   const sendPhoneCode = async () => {
     if (!supabase) {
       setFeedback("Supabase er ikke konfigurert.");
@@ -3301,12 +3346,12 @@ function TeamProfileScreen({
     setSendingPhoneCode(true);
     setFeedback(null);
 
-    const { error } = await supabase.auth.updateUser({ phone: normalizedPhone });
+    const { error } = await callPhoneVerification("send");
 
     setSendingPhoneCode(false);
 
     if (error) {
-      setFeedback(getReadableErrorMessage(error, "Vi klarte ikke å sende SMS-kode akkurat nå."));
+      setFeedback(error);
       return;
     }
 
@@ -3334,22 +3379,18 @@ function TeamProfileScreen({
     setVerifyingPhone(true);
     setFeedback(null);
 
-    const { error } = await verifyPhoneOtpToken(normalizedPhone, phoneCode.trim());
+    const { error } = await callPhoneVerification("verify");
 
     setVerifyingPhone(false);
 
     if (error) {
-      setFeedback("Koden kunne ikke bekreftes automatisk. Sjekk at SMS-koden er fylt inn, og trykk Lagre lagprofil.");
+      setFeedback(error);
       return;
     }
 
     persistPhoneVerification(normalizedPhone);
     setPhoneCode("");
-    const { data: authData } = await supabase.auth.getUser();
-    const confirmedAuthPhone = normalizePhoneForOtp(authData.user?.phone ?? "");
-    if (confirmedAuthPhone === normalizedPhone) {
-      setPhone(normalizedPhone);
-    }
+    setPhone(normalizedPhone);
     setFeedback("Telefonnummeret er bekreftet. Nå kan du lagre lagprofilen.");
   };
 
@@ -3375,23 +3416,20 @@ function TeamProfileScreen({
     let phoneConfirmedForSave = phoneIsVerified || readStoredPhoneVerification(authUserId, normalizedPhone);
 
     if (!phoneConfirmedForSave && phoneCode.trim()) {
-      const { error: verifyError } = await verifyPhoneOtpToken(normalizedPhone, phoneCode.trim());
-
-      if (!verifyError) {
+      const { error } = await callPhoneVerification("verify");
+      if (!error) {
         persistPhoneVerification(normalizedPhone);
         phoneConfirmedForSave = true;
+      } else {
+        setSaving(false);
+        setFeedback(error);
+        return;
       }
     }
 
     if (!phoneConfirmedForSave) {
-      const { data: authData } = await supabase.auth.getUser();
-      const confirmedAuthPhone = normalizePhoneForOtp(authData.user?.phone ?? "");
-      phoneConfirmedForSave = confirmedAuthPhone === normalizedPhone;
-    }
-
-    if (!phoneConfirmedForSave && phoneCode.trim().length < 4) {
       setSaving(false);
-      setFeedback("Skriv inn SMS-koden før du lagrer lagprofilen.");
+      setFeedback("Bekreft telefonnummeret med SMS-koden før du lagrer lagprofilen.");
       return;
     }
 
@@ -3399,7 +3437,9 @@ function TeamProfileScreen({
       id: authUserId,
       full_name: contactName.trim(),
       email,
-      phone: normalizedPhone
+      phone: normalizedPhone,
+      phone_verified: true,
+      phone_verified_at: new Date().toISOString()
     };
 
     const { error: userError } = await supabase.from("users").upsert(userPayload);
@@ -3463,10 +3503,12 @@ function TeamProfileScreen({
               <Picker
                 selectedValue={sport}
                 onValueChange={(value: Sport) => setSport(value)}
+                dropdownIconColor={colors.text}
+                itemStyle={styles.formPickerItem}
                 style={styles.formPicker}
               >
-                <Picker.Item label="Fotball" value="Fotball" />
-                <Picker.Item label="Håndball" value="Handball" />
+                <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
+                <Picker.Item label="Håndball" value="Handball" color={colors.text} />
               </Picker>
             </View>
 
@@ -3729,10 +3771,12 @@ function ProfileEditModal({
               <Picker
                 selectedValue={sport}
                 onValueChange={(value: Sport) => setSport(value)}
+                dropdownIconColor={colors.text}
+                itemStyle={styles.formPickerItem}
                 style={styles.formPicker}
               >
-                <Picker.Item label="Fotball" value="Fotball" />
-                <Picker.Item label="Håndball" value="Handball" />
+                <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
+                <Picker.Item label="Håndball" value="Handball" color={colors.text} />
               </Picker>
             </View>
 
@@ -3782,10 +3826,12 @@ function ProfileEditModal({
                 <Picker
                   selectedValue={newTeamSport}
                   onValueChange={(value: Sport) => setNewTeamSport(value)}
+                  dropdownIconColor={colors.text}
+                  itemStyle={styles.formPickerItem}
                   style={styles.formPicker}
                 >
-                  <Picker.Item label="Fotball" value="Fotball" />
-                  <Picker.Item label="Håndball" value="Handball" />
+                  <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
+                  <Picker.Item label="Håndball" value="Handball" color={colors.text} />
                 </Picker>
               </View>
               <Input
@@ -4702,10 +4748,12 @@ function CreateMatchModal({
               <Picker
                 selectedValue={form.sport}
                 onValueChange={(sport: Sport) => onChange({ ...form, sport })}
+                dropdownIconColor={colors.text}
+                itemStyle={styles.formPickerItem}
                 style={styles.formPicker}
               >
-                <Picker.Item label="Fotball" value="Fotball" />
-                <Picker.Item label="Håndball" value="Handball" />
+                <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
+                <Picker.Item label="Håndball" value="Handball" color={colors.text} />
               </Picker>
             </View>
 
@@ -4784,10 +4832,12 @@ function EditMatchModal({
               <Picker
                 selectedValue={form.sport}
                 onValueChange={(sport: Sport) => onChange({ ...form, sport })}
+                dropdownIconColor={colors.text}
+                itemStyle={styles.formPickerItem}
                 style={styles.formPicker}
               >
-                <Picker.Item label="Fotball" value="Fotball" />
-                <Picker.Item label="Håndball" value="Handball" />
+                <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
+                <Picker.Item label="Håndball" value="Handball" color={colors.text} />
               </Picker>
             </View>
             <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
@@ -5495,50 +5545,6 @@ function saveStoredPhoneVerification(userId: string, phone: string) {
   window.localStorage.setItem(key, "true");
 }
 
-function getDebugErrorMessage(error: unknown) {
-  if (!error) {
-    return "";
-  }
-
-  if (error instanceof Error) {
-    return error.message;
-  }
-
-  if (typeof error === "object" && "message" in error) {
-    return String((error as { message?: unknown }).message ?? "");
-  }
-
-  return String(error);
-}
-
-async function verifyPhoneOtpToken(phone: string, token: string) {
-  if (!supabase) {
-    return { error: new Error("Supabase er ikke konfigurert.") };
-  }
-
-  const phoneVariants = phone.startsWith("+") ? [phone, phone.slice(1)] : [phone];
-  const otpTypes = ["phone_change", "sms"] as const;
-  let lastError: unknown = null;
-
-  for (const type of otpTypes) {
-    for (const phoneValue of phoneVariants) {
-      const { error } = await supabase.auth.verifyOtp({
-        phone: phoneValue,
-        token,
-        type
-      });
-
-      if (!error) {
-        return { error: null };
-      }
-
-      lastError = error;
-    }
-  }
-
-  return { error: lastError };
-}
-
 function replaceRequest(requests: MatchRequest[], temporaryId: string, savedRequest: MatchRequest) {
   const withoutDuplicate = requests.filter(
     (request) => request.id !== savedRequest.id || request.id === temporaryId
@@ -6145,16 +6151,18 @@ function createStyles(colors: typeof lightColors) {
   },
   headerProfileWrap: {
     left: 22,
+    minHeight: 76,
     position: "absolute",
     right: 22,
     top: 10,
-    minHeight: 76
+    zIndex: 80
   },
   headerGreetingWrap: {
     left: 0,
     maxWidth: "43%",
     position: "absolute",
-    top: 0
+    top: 0,
+    zIndex: 1
   },
   headerGreetingEyebrow: {
     color: "rgba(255, 255, 255, 0.82)",
@@ -6170,11 +6178,12 @@ function createStyles(colors: typeof lightColors) {
   },
   headerTeamWrap: {
     alignItems: "flex-end",
+    elevation: 80,
     maxWidth: "58%",
     position: "absolute",
     right: 0,
     top: 0,
-    zIndex: 20
+    zIndex: 100
   },
   headerProfileTeam: {
     backgroundColor: "rgba(255, 255, 255, 0.14)",
@@ -6217,7 +6226,7 @@ function createStyles(colors: typeof lightColors) {
     borderColor: colors.border,
     borderRadius: 8,
     borderWidth: 2,
-    elevation: 16,
+    elevation: 90,
     minWidth: 190,
     paddingVertical: 4,
     position: "absolute",
@@ -6225,9 +6234,9 @@ function createStyles(colors: typeof lightColors) {
     top: 31,
     shadowColor: "#000000",
     shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.32,
+    shadowOpacity: 0.42,
     shadowRadius: 18,
-    zIndex: 30
+    zIndex: 120
   },
   headerStatusRow: {
     bottom: 18,
@@ -7396,6 +7405,12 @@ function createStyles(colors: typeof lightColors) {
     fontSize: 18,
     fontWeight: "700",
     minHeight: 50
+  },
+  formPickerItem: {
+    backgroundColor: colors.card,
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: "700"
   },
   primaryButtonFull: {
     alignItems: "center",
