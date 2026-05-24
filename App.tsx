@@ -403,6 +403,15 @@ const isPasswordResetUrl = () => {
   return path === "/password-reset" || href.includes("/password-reset");
 };
 
+const shouldStartSignedOutForWebReview = () => {
+  if (typeof window === "undefined" || !window.location) {
+    return false;
+  }
+
+  const searchParams = new URLSearchParams(window.location.search);
+  return searchParams.get("logout") === "1" || searchParams.get("start") === "login";
+};
+
 const getPasswordResetCodeFromUrl = () => {
   if (typeof window === "undefined" || !window.location) {
     return null;
@@ -1172,6 +1181,18 @@ function PlayrApp({
             return;
           }
         }
+      }
+
+      if (shouldStartSignedOutForWebReview()) {
+        await supabase.auth.signOut();
+        setPasswordResetVisible(false);
+        setUserEmail(null);
+        setAuthUserId(null);
+        setAuthReady(true);
+        setProfileReady(true);
+        setHasTeamProfile(false);
+        setAppDataReady(false);
+        return;
       }
 
       const { data } = await supabase.auth.getSession();
