@@ -236,6 +236,7 @@ const darkColors: typeof lightColors = {
 
 let colors = darkColors;
 let nativeThemeMode: ThemeMode = "dark";
+const verifiedPhoneMemory = new Set<string>();
 
 const readThemeMode = (): ThemeMode => {
   if (typeof window === "undefined" || !window.localStorage) {
@@ -1189,11 +1190,16 @@ function PlayrApp({
 
       setUserEmail(session?.user.email ?? null);
       setAuthUserId(session?.user.id ?? null);
+      setAuthReady(true);
+
+      if (event === "USER_UPDATED" || event === "TOKEN_REFRESHED" || event === "PASSWORD_RECOVERY") {
+        return;
+      }
+
       setProfileReady(!session?.user);
       setHasTeamProfile(false);
       setAppDataReady(!session?.user);
       setTeamProfiles([]);
-      setAuthReady(true);
       setSeenIncomingRequestIds([]);
       setSeenApprovedRequestIds([]);
       setSeenMatchingMatchIds([]);
@@ -3245,13 +3251,20 @@ function TeamProfileScreen({
   const [ageGroup, setAgeGroup] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneCode, setPhoneCode] = useState("");
-  const [verifiedPhone, setVerifiedPhone] = useState("");
+  const [phoneVerified, setPhoneVerified] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [sendingPhoneCode, setSendingPhoneCode] = useState(false);
   const [verifyingPhone, setVerifyingPhone] = useState(false);
   const normalizedPhone = normalizePhoneForOtp(phone);
-  const phoneIsVerified = Boolean(normalizedPhone && verifiedPhone === normalizedPhone);
+  const phoneIsVerified = Boolean(
+    normalizedPhone && (phoneVerified || readStoredPhoneVerification(authUserId, normalizedPhone))
+  );
+
+  const persistPhoneVerification = (phoneValue: string) => {
+    setPhoneVerified(true);
+    saveStoredPhoneVerification(authUserId, phoneValue);
+  };
 
   const sendPhoneCode = async () => {
     if (!supabase) {
@@ -3276,7 +3289,7 @@ function TeamProfileScreen({
       return;
     }
 
-    setVerifiedPhone("");
+    setPhoneVerified(false);
     setPhoneCode("");
     setFeedback(`Vi har sendt en bekreftelseskode til ${normalizedPhone}.`);
   };
@@ -3300,20 +3313,22 @@ function TeamProfileScreen({
     setVerifyingPhone(true);
     setFeedback(null);
 
-    const { error } = await supabase.auth.verifyOtp({
-      phone: normalizedPhone,
-      token: phoneCode.trim(),
-      type: "phone_change"
-    });
+    const { error } = await verifyPhoneOtpToken(normalizedPhone, phoneCode.trim());
 
     setVerifyingPhone(false);
 
     if (error) {
-      setFeedback(getReadableErrorMessage(error, "Koden stemmer ikke. Prøv igjen."));
+      setFeedback("Koden kunne ikke bekreftes automatisk. Sjekk at SMS-koden er fylt inn, og trykk Lagre lagprofil.");
       return;
     }
 
-    setVerifiedPhone(normalizedPhone);
+    persistPhoneVerification(normalizedPhone);
+    setPhoneCode("");
+    const { data: authData } = await supabase.auth.getUser();
+    const confirmedAuthPhone = normalizePhoneForOtp(authData.user?.phone ?? "");
+    if (confirmedAuthPhone === normalizedPhone) {
+      setPhone(normalizedPhone);
+    }
     setFeedback("Telefonnummeret er bekreftet. Nå kan du lagre lagprofilen.");
   };
 
@@ -3333,13 +3348,31 @@ function TeamProfileScreen({
       return;
     }
 
-    if (!phoneIsVerified) {
-      setFeedback("Bekreft telefonnummeret med SMS-koden før du lagrer lagprofilen.");
-      return;
-    }
-
     setSaving(true);
     setFeedback(null);
+
+    let phoneConfirmedForSave = phoneIsVerified || readStoredPhoneVerification(authUserId, normalizedPhone);
+
+    if (!phoneConfirmedForSave && phoneCode.trim()) {
+      const { error: verifyError } = await verifyPhoneOtpToken(normalizedPhone, phoneCode.trim());
+
+      if (!verifyError) {
+        persistPhoneVerification(normalizedPhone);
+        phoneConfirmedForSave = true;
+      }
+    }
+
+    if (!phoneConfirmedForSave) {
+      const { data: authData } = await supabase.auth.getUser();
+      const confirmedAuthPhone = normalizePhoneForOtp(authData.user?.phone ?? "");
+      phoneConfirmedForSave = confirmedAuthPhone === normalizedPhone;
+    }
+
+    if (!phoneConfirmedForSave && phoneCode.trim().length < 4) {
+      setSaving(false);
+      setFeedback("Skriv inn SMS-koden før du lagrer lagprofilen.");
+      return;
+    }
 
     const userPayload = {
       id: authUserId,
@@ -3406,7 +3439,11 @@ function TeamProfileScreen({
 
             <Text style={styles.inputLabel}>Idrett</Text>
             <View style={styles.pickerField}>
-              <Picker selectedValue={sport} onValueChange={(value: Sport) => setSport(value)}>
+              <Picker
+                selectedValue={sport}
+                onValueChange={(value: Sport) => setSport(value)}
+                style={styles.formPicker}
+              >
                 <Picker.Item label="Fotball" value="Fotball" />
                 <Picker.Item label="Håndball" value="Handball" />
               </Picker>
@@ -3424,7 +3461,7 @@ function TeamProfileScreen({
               value={phone}
               onChangeText={(value) => {
                 setPhone(value);
-                setVerifiedPhone("");
+                setPhoneVerified(false);
               }}
               placeholder="Eks: 900 00 000"
               keyboardType="phone-pad"
@@ -3483,8 +3520,8 @@ function TeamProfileScreen({
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
             <Pressable
-              style={[styles.primaryButtonFull, (saving || !phoneIsVerified) && styles.disabledButton]}
-              disabled={saving || !phoneIsVerified}
+              style={[styles.primaryButtonFull, saving && styles.disabledButton]}
+              disabled={saving}
               onPress={saveProfile}
             >
               <Text style={styles.primaryButtonText}>
@@ -3668,7 +3705,11 @@ function ProfileEditModal({
 
             <Text style={styles.inputLabel}>Idrett</Text>
             <View style={styles.pickerField}>
-              <Picker selectedValue={sport} onValueChange={(value: Sport) => setSport(value)}>
+              <Picker
+                selectedValue={sport}
+                onValueChange={(value: Sport) => setSport(value)}
+                style={styles.formPicker}
+              >
                 <Picker.Item label="Fotball" value="Fotball" />
                 <Picker.Item label="Håndball" value="Handball" />
               </Picker>
@@ -5397,6 +5438,86 @@ function normalizePhoneForOtp(value: string) {
   return /^\+[1-9]\d{7,14}$/.test(withCountryCode) ? withCountryCode : "";
 }
 
+function getVerifiedPhoneStorageKey(userId: string, phone: string) {
+  return `playr-phone-verified:${userId}:${phone}`;
+}
+
+function readStoredPhoneVerification(userId: string, phone: string) {
+  if (!userId || !phone) {
+    return false;
+  }
+
+  const key = getVerifiedPhoneStorageKey(userId, phone);
+  if (verifiedPhoneMemory.has(key)) {
+    return true;
+  }
+
+  if (typeof window === "undefined" || !window.localStorage) {
+    return false;
+  }
+
+  return window.localStorage.getItem(key) === "true";
+}
+
+function saveStoredPhoneVerification(userId: string, phone: string) {
+  if (!userId || !phone) {
+    return;
+  }
+
+  const key = getVerifiedPhoneStorageKey(userId, phone);
+  verifiedPhoneMemory.add(key);
+
+  if (typeof window === "undefined" || !window.localStorage) {
+    return;
+  }
+
+  window.localStorage.setItem(key, "true");
+}
+
+function getDebugErrorMessage(error: unknown) {
+  if (!error) {
+    return "";
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "object" && "message" in error) {
+    return String((error as { message?: unknown }).message ?? "");
+  }
+
+  return String(error);
+}
+
+async function verifyPhoneOtpToken(phone: string, token: string) {
+  if (!supabase) {
+    return { error: new Error("Supabase er ikke konfigurert.") };
+  }
+
+  const phoneVariants = phone.startsWith("+") ? [phone, phone.slice(1)] : [phone];
+  const otpTypes = ["phone_change", "sms"] as const;
+  let lastError: unknown = null;
+
+  for (const type of otpTypes) {
+    for (const phoneValue of phoneVariants) {
+      const { error } = await supabase.auth.verifyOtp({
+        phone: phoneValue,
+        token,
+        type
+      });
+
+      if (!error) {
+        return { error: null };
+      }
+
+      lastError = error;
+    }
+  }
+
+  return { error: lastError };
+}
+
 function replaceRequest(requests: MatchRequest[], temporaryId: string, savedRequest: MatchRequest) {
   const withoutDuplicate = requests.filter(
     (request) => request.id !== savedRequest.id || request.id === temporaryId
@@ -5674,6 +5795,15 @@ function getReadableErrorMessage(error: unknown, fallback = "Noe gikk galt. Prø
 
   if (lowerMessage.includes("password")) {
     return "Passordet må være minst 6 tegn.";
+  }
+
+  if (
+    lowerMessage.includes("token has expired") ||
+    lowerMessage.includes("token is expired") ||
+    lowerMessage.includes("token is invalid") ||
+    lowerMessage.includes("expired or is invalid")
+  ) {
+    return fallbackMessage ?? "Koden er utløpt eller ugyldig. Send en ny SMS-kode og prøv igjen.";
   }
 
   if (lowerMessage.includes("row-level security") || lowerMessage.includes("violates row-level security")) {
@@ -6065,17 +6195,17 @@ function createStyles(colors: typeof lightColors) {
     backgroundColor: colors.card,
     borderColor: colors.border,
     borderRadius: 8,
-    borderWidth: 1,
-    elevation: 8,
+    borderWidth: 2,
+    elevation: 16,
     minWidth: 190,
     paddingVertical: 4,
     position: "absolute",
     right: 0,
     top: 31,
     shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.16,
-    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
     zIndex: 30
   },
   headerStatusRow: {
@@ -6103,6 +6233,7 @@ function createStyles(colors: typeof lightColors) {
   },
   headerTeamMenuItem: {
     alignItems: "center",
+    backgroundColor: colors.card,
     flexDirection: "row",
     gap: 8,
     justifyContent: "space-between",
