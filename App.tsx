@@ -7037,7 +7037,7 @@ function createStyles(colors: typeof lightColors) {
   },
   requestTabBadge: {
     alignItems: "center",
-    backgroundColor: colors.card,
+    backgroundColor: colors.black,
     borderRadius: 8,
     justifyContent: "center",
     minWidth: 24,
@@ -7045,15 +7045,15 @@ function createStyles(colors: typeof lightColors) {
     paddingVertical: 3
   },
   requestTabBadgeActive: {
-    backgroundColor: colors.greenSoft
+    backgroundColor: colors.black
   },
   requestTabBadgeText: {
-    color: colors.greenDark,
+    color: colors.card,
     fontSize: 12,
     fontWeight: "900"
   },
   requestTabBadgeTextActive: {
-    color: colors.greenDark
+    color: colors.card
   },
   mineSectionHeader: {
     alignItems: "center",
