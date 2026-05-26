@@ -26,6 +26,7 @@ import {
   useFonts
 } from "@expo-google-fonts/open-sans";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
@@ -459,17 +460,15 @@ type SeenNotificationCounts = {
 
 const nativeSeenNotificationCounts: Record<string, SeenNotificationCounts> = {};
 
-const readSeenNotificationCounts = (profileId: string) => {
-  if (typeof window === "undefined" || !window.localStorage) {
-    return nativeSeenNotificationCounts[profileId] ?? null;
+const getSeenNotificationStorageKey = (profileId: string) =>
+  `playr-seen-notification-counts-${profileId}`;
+
+const parseSeenNotificationCounts = (saved: string | null) => {
+  if (!saved) {
+    return null;
   }
 
   try {
-    const saved = window.localStorage.getItem(`playr-seen-notification-counts-${profileId}`);
-    if (!saved) {
-      return null;
-    }
-
     const parsed = JSON.parse(saved);
     return {
       incoming: Number(parsed.incoming) || 0,
@@ -482,6 +481,39 @@ const readSeenNotificationCounts = (profileId: string) => {
           ? (parsed.chatByRequest as Record<string, number>)
           : {}
     };
+  } catch {
+    return null;
+  }
+};
+
+const readSeenNotificationCounts = (profileId: string) => {
+  if (typeof window === "undefined" || !window.localStorage) {
+    return nativeSeenNotificationCounts[profileId] ?? null;
+  }
+
+  return parseSeenNotificationCounts(window.localStorage.getItem(getSeenNotificationStorageKey(profileId)));
+};
+
+const loadSeenNotificationCounts = async (profileId: string) => {
+  const inMemory = readSeenNotificationCounts(profileId);
+
+  if (inMemory) {
+    return inMemory;
+  }
+
+  if (typeof window !== "undefined" && window.localStorage) {
+    return null;
+  }
+
+  try {
+    const saved = await AsyncStorage.getItem(getSeenNotificationStorageKey(profileId));
+    const parsed = parseSeenNotificationCounts(saved);
+
+    if (parsed) {
+      nativeSeenNotificationCounts[profileId] = parsed;
+    }
+
+    return parsed;
   } catch {
     return null;
   }
@@ -508,11 +540,12 @@ const saveSeenNotificationCounts = (
 
   if (typeof window === "undefined" || !window.localStorage) {
     nativeSeenNotificationCounts[profileId] = payload;
+    AsyncStorage.setItem(getSeenNotificationStorageKey(profileId), JSON.stringify(payload)).catch(() => undefined);
     return;
   }
 
   window.localStorage.setItem(
-    `playr-seen-notification-counts-${profileId}`,
+    getSeenNotificationStorageKey(profileId),
     JSON.stringify(payload)
   );
 };
@@ -1063,31 +1096,49 @@ function PlayrApp({
   };
 
   useEffect(() => {
-    if (!appDataReady || !currentProfile.id || typeof window === "undefined") {
+    if (!appDataReady || !currentProfile.id) {
       return;
     }
 
-    const locationSearch = typeof window.location?.search === "string" ? window.location.search : "";
+    let cancelled = false;
+    const locationSearch =
+      typeof window !== "undefined" && typeof window.location?.search === "string"
+        ? window.location.search
+        : "";
     const shouldClear = new URLSearchParams(locationSearch).get("clearNotifications") === "1";
-    const saved = shouldClear ? null : readSeenNotificationCounts(currentProfile.id);
-    const nextIncomingIds = saved?.incomingIds ?? [];
-    const nextApprovedIds = saved?.approvedIds ?? [];
-    const nextMatchingMatchIds = saved?.matchingMatchIds ?? [];
-    const nextChatByRequest = saved?.chatByRequest ?? {};
 
-    setSeenIncomingRequestIds(nextIncomingIds);
-    setSeenApprovedRequestIds(nextApprovedIds);
-    setSeenMatchingMatchIds(nextMatchingMatchIds);
-    setSeenChatByRequest(nextChatByRequest);
-    saveSeenNotificationCounts(
-      currentProfile.id,
-      nextIncomingIds.length,
-      nextApprovedIds.length,
-      nextChatByRequest,
-      nextIncomingIds,
-      nextApprovedIds,
-      nextMatchingMatchIds
-    );
+    const hydrateSeenNotifications = async () => {
+      const saved = shouldClear ? null : await loadSeenNotificationCounts(currentProfile.id);
+
+      if (cancelled) {
+        return;
+      }
+
+      const nextIncomingIds = saved?.incomingIds ?? [];
+      const nextApprovedIds = saved?.approvedIds ?? [];
+      const nextMatchingMatchIds = saved?.matchingMatchIds ?? [];
+      const nextChatByRequest = saved?.chatByRequest ?? {};
+
+      setSeenIncomingRequestIds(nextIncomingIds);
+      setSeenApprovedRequestIds(nextApprovedIds);
+      setSeenMatchingMatchIds(nextMatchingMatchIds);
+      setSeenChatByRequest(nextChatByRequest);
+      saveSeenNotificationCounts(
+        currentProfile.id,
+        nextIncomingIds.length,
+        nextApprovedIds.length,
+        nextChatByRequest,
+        nextIncomingIds,
+        nextApprovedIds,
+        nextMatchingMatchIds
+      );
+    };
+
+    hydrateSeenNotifications();
+
+    return () => {
+      cancelled = true;
+    };
   }, [appDataReady, currentProfile.id, pendingIncomingCount, approvedMyRequestsCount]);
 
   useEffect(() => {
@@ -2126,6 +2177,7 @@ function PlayrApp({
     setCreateVisible(false);
     setSeenIncomingRequestIds([]);
     setSeenApprovedRequestIds([]);
+    setSeenMatchingMatchIds([]);
     setSeenChatByRequest({});
   };
 
@@ -2153,8 +2205,15 @@ function PlayrApp({
 
       if (typeof window !== "undefined" && window.localStorage) {
         teamProfiles.forEach((profile) => {
-          window.localStorage.removeItem(`playr-seen-notification-counts-${profile.id}`);
+          window.localStorage.removeItem(getSeenNotificationStorageKey(profile.id));
         });
+      } else {
+        await Promise.all(
+          teamProfiles.map((profile) => {
+            delete nativeSeenNotificationCounts[profile.id];
+            return AsyncStorage.removeItem(getSeenNotificationStorageKey(profile.id));
+          })
+        );
       }
 
       resetToSignedOutState();
@@ -7402,14 +7461,14 @@ function createStyles(colors: typeof lightColors) {
   formPicker: {
     backgroundColor: colors.card,
     color: colors.text,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "700",
-    minHeight: 50
+    minHeight: 40
   },
   formPickerItem: {
     backgroundColor: colors.card,
     color: colors.text,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: "700"
   },
   primaryButtonFull: {
