@@ -3557,19 +3557,7 @@ function TeamProfileScreen({
               placeholder="Eks: Tommy Hansen"
             />
 
-            <Text style={styles.inputLabel}>Idrett</Text>
-            <View style={styles.pickerField}>
-              <Picker
-                selectedValue={sport}
-                onValueChange={(value: Sport) => setSport(value)}
-                dropdownIconColor={colors.text}
-                itemStyle={styles.formPickerItem}
-                style={styles.formPicker}
-              >
-                <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
-                <Picker.Item label="Håndball" value="Handball" color={colors.text} />
-              </Picker>
-            </View>
+            <SportSelect value={sport} onChange={setSport} />
 
             <Input
               label="Lag"
@@ -3825,19 +3813,7 @@ function ProfileEditModal({
               placeholder="Eks: Tommy Hansen"
             />
 
-            <Text style={styles.inputLabel}>Idrett</Text>
-            <View style={styles.pickerField}>
-              <Picker
-                selectedValue={sport}
-                onValueChange={(value: Sport) => setSport(value)}
-                dropdownIconColor={colors.text}
-                itemStyle={styles.formPickerItem}
-                style={styles.formPicker}
-              >
-                <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
-                <Picker.Item label="Håndball" value="Handball" color={colors.text} />
-              </Picker>
-            </View>
+            <SportSelect value={sport} onChange={setSport} />
 
             <Input
               label="Lag"
@@ -3880,19 +3856,7 @@ function ProfileEditModal({
 
             <View style={styles.profileTeamsBox}>
               <Text style={styles.sectionTitle}>Legg til ekstra lag</Text>
-              <Text style={styles.inputLabel}>Idrett</Text>
-              <View style={styles.pickerField}>
-                <Picker
-                  selectedValue={newTeamSport}
-                  onValueChange={(value: Sport) => setNewTeamSport(value)}
-                  dropdownIconColor={colors.text}
-                  itemStyle={styles.formPickerItem}
-                  style={styles.formPicker}
-                >
-                  <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
-                  <Picker.Item label="Håndball" value="Handball" color={colors.text} />
-                </Picker>
-              </View>
+              <SportSelect value={newTeamSport} onChange={setNewTeamSport} />
               <Input
                 label="Lag"
                 value={newTeam}
@@ -4802,19 +4766,7 @@ function CreateMatchModal({
           </View>
 
           <ScrollView contentContainerStyle={styles.form}>
-            <Text style={styles.inputLabel}>Idrett</Text>
-            <View style={styles.pickerField}>
-              <Picker
-                selectedValue={form.sport}
-                onValueChange={(sport: Sport) => onChange({ ...form, sport })}
-                dropdownIconColor={colors.text}
-                itemStyle={styles.formPickerItem}
-                style={styles.formPicker}
-              >
-                <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
-                <Picker.Item label="Håndball" value="Handball" color={colors.text} />
-              </Picker>
-            </View>
+            <SportSelect value={form.sport} onChange={(sport) => onChange({ ...form, sport })} />
 
             <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
             {showLevelInput ? (
@@ -4886,19 +4838,7 @@ function EditMatchModal({
           </View>
 
           <ScrollView contentContainerStyle={styles.form}>
-            <Text style={styles.inputLabel}>Idrett</Text>
-            <View style={styles.pickerField}>
-              <Picker
-                selectedValue={form.sport}
-                onValueChange={(sport: Sport) => onChange({ ...form, sport })}
-                dropdownIconColor={colors.text}
-                itemStyle={styles.formPickerItem}
-                style={styles.formPicker}
-              >
-                <Picker.Item label="Fotball" value="Fotball" color={colors.text} />
-                <Picker.Item label="Håndball" value="Handball" color={colors.text} />
-              </Picker>
-            </View>
+            <SportSelect value={form.sport} onChange={(sport) => onChange({ ...form, sport })} />
             <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
             <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
             <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026 eller 15-06-26" />
@@ -5375,6 +5315,38 @@ function LevelInput({
       <Text style={styles.levelHelpText}>
         Hvilket nivå er laget ditt? 1=Øvd - 2=Middels - 3=Mindre Øvd
       </Text>
+    </View>
+  );
+}
+
+function SportSelect({
+  value,
+  onChange
+}: {
+  value: Sport;
+  onChange: (sport: Sport) => void;
+}) {
+  const options: Sport[] = ["Fotball", "Handball"];
+
+  return (
+    <View>
+      <Text style={styles.inputLabel}>Idrett</Text>
+      <View style={styles.sportSelect}>
+        {options.map((sport) => {
+          const selected = value === sport;
+          return (
+            <Pressable
+              key={sport}
+              style={[styles.sportSelectOption, selected && styles.sportSelectOptionActive]}
+              onPress={() => onChange(sport)}
+            >
+              <Text style={[styles.sportSelectText, selected && styles.sportSelectTextActive]}>
+                {formatSport(sport)}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
     </View>
   );
 }
@@ -7470,6 +7442,35 @@ function createStyles(colors: typeof lightColors) {
     color: colors.text,
     fontSize: 15,
     fontWeight: "700"
+  },
+  sportSelect: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    padding: 4
+  },
+  sportSelectOption: {
+    alignItems: "center",
+    borderRadius: 6,
+    flex: 1,
+    justifyContent: "center",
+    minHeight: 34,
+    paddingHorizontal: 8,
+    paddingVertical: 6
+  },
+  sportSelectOptionActive: {
+    backgroundColor: colors.greenDark
+  },
+  sportSelectText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontWeight: "800"
+  },
+  sportSelectTextActive: {
+    color: colors.background === darkColors.background ? colors.background : "#FFFFFF"
   },
   primaryButtonFull: {
     alignItems: "center",
