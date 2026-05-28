@@ -17,25 +17,32 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.playrmatch.playr",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "bundleIdentifier": "com.playrmatch.playr"
     },
     "android": {
       "package": "com.playrmatch.playr",
+      "versionCode": 1,
+      "permissions": [],
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F8FBF7"
       }
     },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 35,
+            "buildToolsVersion": "35.0.0"
+          }
+        }
+      ]
+    ],
     "web": {
       "bundler": "metro"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "4d8e55d1-1918-436c-8afd-bba8630461e4"
-      }
     }
   }
 }
