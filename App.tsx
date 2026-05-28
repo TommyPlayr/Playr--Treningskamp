@@ -781,6 +781,7 @@ function PlayrApp({
   const [seenApprovedRequestIds, setSeenApprovedRequestIds] = useState<string[]>([]);
   const [seenMatchingMatchIds, setSeenMatchingMatchIds] = useState<string[]>([]);
   const [seenChatByRequest, setSeenChatByRequest] = useState<Record<string, number>>({});
+  const [notificationSeenProfileId, setNotificationSeenProfileId] = useState<string | null>(fallbackProfile.id);
   const [isRefreshingData, setIsRefreshingData] = useState(false);
 
   const selectedMatch = matches.find((match) => match.id === selectedMatchId) ?? null;
@@ -888,7 +889,10 @@ function PlayrApp({
     [authUserId, currentProfile.id, matches, messages, requests, seenChatByRequest, teamProfiles]
   );
   const chatMessageNotificationCount = currentChatNotifications.count;
-  const firstUnreadChatRequestId = currentChatNotifications.requestIds[0] ?? null;
+  const notificationsReadyForCurrentProfile = notificationSeenProfileId === currentProfile.id;
+  const firstUnreadChatRequestId = notificationsReadyForCurrentProfile
+    ? currentChatNotifications.requestIds[0] ?? null
+    : null;
 
   const seenIncomingRequestIdSet = useMemo(
     () => new Set(seenIncomingRequestIds),
@@ -898,14 +902,13 @@ function PlayrApp({
     () => new Set(seenApprovedRequestIds),
     [seenApprovedRequestIds]
   );
-  const visibleIncomingNotificationCount = pendingIncomingRequestIds.filter(
+  const rawVisibleIncomingNotificationCount = pendingIncomingRequestIds.filter(
     (requestId) => !seenIncomingRequestIdSet.has(requestId)
   ).length;
-  const visibleApprovedNotificationCount = approvedMyRequestIds.filter(
+  const rawVisibleApprovedNotificationCount = approvedMyRequestIds.filter(
     (requestId) => !seenApprovedRequestIdSet.has(requestId)
   ).length;
-  const visibleChatNotificationCount = chatMessageNotificationCount;
-  const unreadChatMatchIds = currentChatNotifications.matchIds;
+  const rawVisibleChatNotificationCount = chatMessageNotificationCount;
   const matchingMatchNotificationIds = useMemo(() => {
     const ownedTeamIds = new Set(teamProfiles.map((profile) => profile.id));
     const profileTargets = new Set(
@@ -929,9 +932,24 @@ function PlayrApp({
     () => new Set(seenMatchingMatchIds),
     [seenMatchingMatchIds]
   );
-  const visibleMatchingMatchNotificationCount = matchingMatchNotificationIds.filter(
+  const rawVisibleMatchingMatchNotificationCount = matchingMatchNotificationIds.filter(
     (matchId) => !seenMatchingMatchIdSet.has(matchId)
   ).length;
+  const visibleIncomingNotificationCount = notificationsReadyForCurrentProfile
+    ? rawVisibleIncomingNotificationCount
+    : 0;
+  const visibleApprovedNotificationCount = notificationsReadyForCurrentProfile
+    ? rawVisibleApprovedNotificationCount
+    : 0;
+  const visibleChatNotificationCount = notificationsReadyForCurrentProfile
+    ? rawVisibleChatNotificationCount
+    : 0;
+  const visibleMatchingMatchNotificationCount = notificationsReadyForCurrentProfile
+    ? rawVisibleMatchingMatchNotificationCount
+    : 0;
+  const unreadChatMatchIds = notificationsReadyForCurrentProfile
+    ? currentChatNotifications.matchIds
+    : new Set<string>();
   const openChatRequest = useCallback((requestId: string) => {
     setSelectedRequestId(requestId);
     setSelectedMatchId(null);
@@ -1093,6 +1111,7 @@ function PlayrApp({
     setSeenApprovedRequestIds(saved?.approvedIds ?? []);
     setSeenMatchingMatchIds(saved?.matchingMatchIds ?? []);
     setSeenChatByRequest(saved?.chatByRequest ?? {});
+    setNotificationSeenProfileId(saved ? profile.id : null);
   };
 
   useEffect(() => {
@@ -1123,6 +1142,7 @@ function PlayrApp({
       setSeenApprovedRequestIds(nextApprovedIds);
       setSeenMatchingMatchIds(nextMatchingMatchIds);
       setSeenChatByRequest(nextChatByRequest);
+      setNotificationSeenProfileId(currentProfile.id);
       saveSeenNotificationCounts(
         currentProfile.id,
         nextIncomingIds.length,
