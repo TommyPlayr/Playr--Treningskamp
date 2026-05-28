@@ -911,11 +911,7 @@ function PlayrApp({
   const rawVisibleChatNotificationCount = chatMessageNotificationCount;
   const matchingMatchNotificationIds = useMemo(() => {
     const ownedTeamIds = new Set(teamProfiles.map((profile) => profile.id));
-    const profileTargets = new Set(
-      teamProfiles.map(
-        (profile) => `${profile.sport}:${getAgeGroupDisplay(profile.ageGroup)}`
-      )
-    );
+    const activeProfileTarget = `${currentProfile.sport}:${getAgeGroupDisplay(currentProfile.ageGroup)}`;
 
     return matches
       .filter((match) => {
@@ -923,11 +919,11 @@ function PlayrApp({
         return (
           match.status === "ledig" &&
           !ownedTeamIds.has(match.hostTeamId) &&
-          profileTargets.has(target)
+          target === activeProfileTarget
         );
       })
       .map((match) => match.id);
-  }, [matches, teamProfiles]);
+  }, [currentProfile.ageGroup, currentProfile.sport, matches, teamProfiles]);
   const seenMatchingMatchIdSet = useMemo(
     () => new Set(seenMatchingMatchIds),
     [seenMatchingMatchIds]
@@ -1103,15 +1099,13 @@ function PlayrApp({
     [markApprovedRequestsAsSeen, markMatchingMatchesAsSeen]
   );
   const selectTeamProfile = (profile: TeamProfile) => {
+    setNotificationSeenProfileId(null);
     setCurrentProfile(profile);
     setForm(createEmptyForm(profile));
-    const saved =
-      typeof window === "undefined" ? null : readSeenNotificationCounts(profile.id);
-    setSeenIncomingRequestIds(saved?.incomingIds ?? []);
-    setSeenApprovedRequestIds(saved?.approvedIds ?? []);
-    setSeenMatchingMatchIds(saved?.matchingMatchIds ?? []);
-    setSeenChatByRequest(saved?.chatByRequest ?? {});
-    setNotificationSeenProfileId(saved ? profile.id : null);
+    setSeenIncomingRequestIds([]);
+    setSeenApprovedRequestIds([]);
+    setSeenMatchingMatchIds([]);
+    setSeenChatByRequest({});
   };
 
   useEffect(() => {
