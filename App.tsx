@@ -3806,7 +3806,7 @@ function ProfileEditModal({
   };
 
   return (
-    <Modal visible={visible} animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -4766,7 +4766,7 @@ function CreateMatchModal({
   const showLevelInput = shouldShowLevelInput(form.ageGroup || profile.ageGroup);
 
   return (
-    <Modal visible={visible} animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
+    <Modal visible={visible} animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -4779,7 +4779,14 @@ function CreateMatchModal({
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={styles.form}>
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.form}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+          >
             <SportSelect value={form.sport} onChange={(sport) => onChange({ ...form, sport })} />
 
             <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
@@ -4838,7 +4845,7 @@ function EditMatchModal({
   }
 
   return (
-    <Modal visible animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
+    <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -4851,7 +4858,14 @@ function EditMatchModal({
             </Pressable>
           </View>
 
-          <ScrollView contentContainerStyle={styles.form}>
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.form}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+          >
             <SportSelect value={form.sport} onChange={(sport) => onChange({ ...form, sport })} />
             <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
             <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
@@ -7207,6 +7221,9 @@ function createStyles(colors: typeof lightColors) {
     zIndex: 40
   },
   modalKeyboard: {
+    flex: 1
+  },
+  modalScroll: {
     flex: 1
   },
   modalHeader: {
