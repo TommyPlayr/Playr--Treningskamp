@@ -4957,7 +4957,7 @@ function MatchDetailsModal({
     isSendingRequest || match.status === "avtalt" || Boolean(myRequest && myRequest.status !== "avslatt");
 
   return (
-    <Modal visible animationType="none" presentationStyle={Platform.OS === "ios" ? "fullScreen" : "pageSheet"} onRequestClose={onClose}>
+    <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <View style={styles.matchModalHeader}>
           <Pressable onPress={onClose} style={styles.closeButton}>
@@ -4966,7 +4966,12 @@ function MatchDetailsModal({
         </View>
 
         <ScrollView
+          style={styles.modalScroll}
           contentContainerStyle={styles.details}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
