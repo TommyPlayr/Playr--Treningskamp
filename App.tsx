@@ -5426,7 +5426,7 @@ function BottomTabs({
     { key: "home", label: "Hjem", icon: "home-outline" },
     { key: "matches", label: "Ledige kamper", icon: "paper-plane-outline" },
     { key: "inbox", label: "Avtalte kamper", icon: "file-tray-outline" },
-    { key: "mine", label: "Forespørsler", icon: "person-outline" }
+    { key: "mine", label: "Min side", icon: "person-outline" }
   ];
 
   return (
@@ -5691,7 +5691,7 @@ function getTabTitle(tab: Tab) {
   if (tab === "inbox") {
     return "Avtalte kamper";
   }
-  return "Forespørsler";
+  return "Min side";
 }
 
 function formatTeamName(club: string, team: string) {
