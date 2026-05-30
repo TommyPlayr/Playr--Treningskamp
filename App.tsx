@@ -84,6 +84,7 @@ type TabBadges = Partial<Record<Tab, number>>;
 type MatchStatus = "ledig" | "avtalt";
 type RequestStatus = "venter" | "godkjent" | "avslatt";
 type ThemeMode = "light" | "dark";
+type AppFeedbackCategory = "bug" | "forbedring" | "funksjon" | "annet";
 
 type TeamProfile = {
   id: string;
@@ -772,6 +773,11 @@ function PlayrApp({
   const [isDeletingMatch, setIsDeletingMatch] = useState(false);
   const [isCancelingMatch, setIsCancelingMatch] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const [feedbackVisible, setFeedbackVisible] = useState(false);
+  const [feedbackCategory, setFeedbackCategory] = useState<AppFeedbackCategory>("forbedring");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+  const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
+  const [isSendingFeedback, setIsSendingFeedback] = useState(false);
   const [editForm, setEditForm] = useState(createEmptyForm(fallbackProfile));
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -2265,6 +2271,57 @@ function PlayrApp({
     ]);
   };
 
+  const openFeedbackModal = () => {
+    setFeedbackCategory("forbedring");
+    setFeedbackMessage("");
+    setFeedbackStatus(null);
+    setFeedbackVisible(true);
+  };
+
+  const submitAppFeedback = async () => {
+    if (!supabase) {
+      setFeedbackStatus("Supabase er ikke konfigurert.");
+      return;
+    }
+
+    if (!authUserId) {
+      setFeedbackStatus("Du må være innlogget for å sende tilbakemelding.");
+      return;
+    }
+
+    const trimmedMessage = feedbackMessage.trim();
+
+    if (!trimmedMessage) {
+      setFeedbackStatus("Skriv inn tilbakemeldingen før du sender.");
+      return;
+    }
+
+    setIsSendingFeedback(true);
+    setFeedbackStatus(null);
+
+    const { error } = await supabase.from("app_feedback").insert({
+      user_id: authUserId,
+      team_id: currentProfile.id,
+      email: userEmail,
+      contact_name: currentProfile.contactName,
+      team_name: currentProfile.team,
+      age_group: getAgeGroupDisplay(currentProfile.ageGroup),
+      category: feedbackCategory,
+      message: trimmedMessage,
+      screen: activeTab
+    });
+
+    setIsSendingFeedback(false);
+
+    if (error) {
+      setFeedbackStatus(getReadableErrorMessage(error));
+      return;
+    }
+
+    setFeedbackMessage("");
+    setFeedbackStatus("Takk! Tilbakemeldingen er sendt til Playr.");
+  };
+
   const sendChatMessage = async () => {
     if (!selectedRequest || isSendingMessage) {
       return;
@@ -2550,6 +2607,7 @@ function PlayrApp({
         onToggleTheme={onToggleTheme}
         onDeleteAccount={confirmDeleteAccount}
         isDeletingAccount={isDeletingAccount}
+        onOpenFeedback={openFeedbackModal}
         onOpenMatch={(id) => setSelectedMatchId(id)}
         onOpenRequest={(id) => {
           if (pendingIncomingRequestIds.includes(id) && !seenIncomingRequestIdSet.has(id)) {
@@ -2698,6 +2756,18 @@ function PlayrApp({
         onSave={saveProfileChanges}
         onAddTeam={addTeamProfile}
         onDeleteTeam={deleteTeamProfile}
+      />
+
+      <AppFeedbackModal
+        visible={feedbackVisible}
+        category={feedbackCategory}
+        message={feedbackMessage}
+        status={feedbackStatus}
+        isSending={isSendingFeedback}
+        onCategoryChange={setFeedbackCategory}
+        onMessageChange={setFeedbackMessage}
+        onClose={() => setFeedbackVisible(false)}
+        onSubmit={submitAppFeedback}
       />
 
       <MatchDetailsModal
@@ -3914,6 +3984,108 @@ function ProfileEditModal({
   );
 }
 
+function AppFeedbackModal({
+  visible,
+  category,
+  message,
+  status,
+  isSending,
+  onCategoryChange,
+  onMessageChange,
+  onClose,
+  onSubmit
+}: {
+  visible: boolean;
+  category: AppFeedbackCategory;
+  message: string;
+  status: string | null;
+  isSending: boolean;
+  onCategoryChange: (category: AppFeedbackCategory) => void;
+  onMessageChange: (message: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const categories: Array<{ key: AppFeedbackCategory; label: string }> = [
+    { key: "bug", label: "Feil / bug" },
+    { key: "forbedring", label: "Forbedringsforslag" },
+    { key: "funksjon", label: "Ny funksjon" },
+    { key: "annet", label: "Annet" }
+  ];
+
+  return (
+    <Modal visible={visible} animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <SafeAreaView style={styles.modalSafe}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalKeyboard}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Gi oss i Playr tilbakemelding</Text>
+            <Pressable onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.details}
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+          >
+            <Text style={styles.feedbackIntro}>
+              Fortell oss hva som er uklart, hva som kan bli bedre, eller hvilke funksjoner du savner.
+            </Text>
+
+            <View style={styles.feedbackCategoryGrid}>
+              {categories.map((item) => {
+                const selected = item.key === category;
+                return (
+                  <Pressable
+                    key={item.key}
+                    style={[styles.feedbackCategoryButton, selected && styles.feedbackCategoryButtonActive]}
+                    onPress={() => onCategoryChange(item.key)}
+                  >
+                    <Text style={[styles.feedbackCategoryText, selected && styles.feedbackCategoryTextActive]}>
+                      {item.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+
+            <View>
+              <Text style={styles.inputLabel}>Tilbakemelding</Text>
+              <TextInput
+                value={message}
+                onChangeText={onMessageChange}
+                placeholder="Skriv tilbakemeldingen din her..."
+                placeholderTextColor={colors.muted}
+                multiline
+                textAlignVertical="top"
+                style={[styles.input, styles.feedbackTextArea]}
+              />
+            </View>
+
+            {status ? <Text style={styles.formFeedback}>{status}</Text> : null}
+
+            <Pressable
+              style={[styles.primaryButtonFull, isSending && styles.disabledButton]}
+              disabled={isSending}
+              onPress={onSubmit}
+            >
+              <Text style={styles.primaryButtonText}>
+                {isSending ? "Sender..." : "Send tilbakemelding"}
+              </Text>
+            </Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 function PlayrLogo({ compact = false }: { compact?: boolean }) {
   return (
     <View style={[styles.logoMarkWrap, compact && styles.logoMarkWrapCompact]}>
@@ -4480,6 +4652,7 @@ function MineScreen({
   onToggleTheme,
   onDeleteAccount,
   isDeletingAccount,
+  onOpenFeedback,
   onOpenMatch,
   onOpenRequest
 }: {
@@ -4496,6 +4669,7 @@ function MineScreen({
   onToggleTheme: () => void;
   onDeleteAccount: () => void;
   isDeletingAccount: boolean;
+  onOpenFeedback: () => void;
   onOpenMatch: (id: string) => void;
   onOpenRequest: (id: string) => void;
 }) {
@@ -4576,6 +4750,10 @@ function MineScreen({
             <Text style={styles.signOutText}>
               {themeMode === "dark" ? "Lys modus" : "Mørk modus"}
             </Text>
+          </Pressable>
+          <Pressable style={styles.feedbackButton} onPress={onOpenFeedback}>
+            <Ionicons name="chatbox-ellipses-outline" size={17} color={colors.greenDark} />
+            <Text style={styles.signOutText}>Gi oss i Playr tilbakemelding</Text>
           </Pressable>
           <Pressable
             style={[styles.deleteAccountButton, isDeletingAccount && styles.disabledButton]}
@@ -7202,6 +7380,19 @@ function createStyles(colors: typeof lightColors) {
     justifyContent: "center",
     paddingHorizontal: 14
   },
+  feedbackButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: 6,
+    minHeight: 40,
+    justifyContent: "center",
+    paddingHorizontal: 14
+  },
   deleteAccountButton: {
     alignItems: "center",
     alignSelf: "flex-start",
@@ -7583,6 +7774,42 @@ function createStyles(colors: typeof lightColors) {
     gap: 12,
     padding: 18,
     paddingBottom: 36
+  },
+  feedbackIntro: {
+    color: colors.muted,
+    fontSize: 14,
+    fontWeight: "700",
+    lineHeight: 21
+  },
+  feedbackCategoryGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8
+  },
+  feedbackCategoryButton: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 42,
+    justifyContent: "center",
+    paddingHorizontal: 12
+  },
+  feedbackCategoryButtonActive: {
+    backgroundColor: colors.greenDark,
+    borderColor: colors.greenDark
+  },
+  feedbackCategoryText: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  feedbackCategoryTextActive: {
+    color: colors.card
+  },
+  feedbackTextArea: {
+    minHeight: 150,
+    paddingTop: 13
   },
   detailRow: {
     backgroundColor: colors.card,
