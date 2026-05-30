@@ -2609,6 +2609,10 @@ function PlayrApp({
       <TeamProfileScreen
         authUserId={authUserId}
         email={userEmail}
+        onBackToLogin={async () => {
+          await supabase?.auth.signOut();
+          resetToSignedOutState();
+        }}
         onProfileCreated={(profile) => {
           setCurrentProfile(profile);
           setTeamProfiles([profile]);
@@ -3333,10 +3337,12 @@ function getLegalPageFromPath(): "privacy" | "terms" | "deletion" | null {
 function TeamProfileScreen({
   authUserId,
   email,
+  onBackToLogin,
   onProfileCreated
 }: {
   authUserId: string;
   email: string;
+  onBackToLogin: () => Promise<void>;
   onProfileCreated: (profile: TeamProfile) => void;
 }) {
   const [contactName, setContactName] = useState("");
@@ -3557,6 +3563,10 @@ function TeamProfileScreen({
         style={styles.authScreen}
       >
         <ScrollView contentContainerStyle={styles.profileSetupContent} keyboardShouldPersistTaps="handled">
+          <Pressable style={styles.profileSetupBackButton} onPress={onBackToLogin}>
+            <Ionicons name="chevron-back" size={18} color={colors.greenDark} />
+            <Text style={styles.profileSetupBackText}>Tilbake til innlogging</Text>
+          </Pressable>
           <PlayrLogo />
           <Text style={styles.authTitle}>Opprett lagprofil</Text>
           <Text style={styles.authText}>
@@ -6085,7 +6095,23 @@ function createStyles(colors: typeof lightColors) {
   profileSetupContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingBottom: 28
+    paddingBottom: 28,
+    paddingHorizontal: 0,
+    paddingTop: 18
+  },
+  profileSetupBackButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    gap: 4,
+    marginBottom: 18,
+    marginLeft: 18,
+    paddingVertical: 10
+  },
+  profileSetupBackText: {
+    color: colors.greenDark,
+    fontSize: 14,
+    fontWeight: "800"
   },
   legalPage: {
     backgroundColor: colors.background,
@@ -6126,15 +6152,15 @@ function createStyles(colors: typeof lightColors) {
   header: {
     backgroundColor: colors.green,
     paddingHorizontal: 22,
-    minHeight: 92,
+    minHeight: Platform.OS === "android" ? 118 : 92,
     justifyContent: "center",
     overflow: "visible",
     paddingBottom: 0,
-    paddingTop: 0,
+    paddingTop: Platform.OS === "android" ? 26 : 0,
     zIndex: 10
   },
   headerHome: {
-    minHeight: 112
+    minHeight: Platform.OS === "android" ? 138 : 112
   },
   headerPatternArc: {
     borderColor: "rgba(255, 255, 255, 0.14)",
@@ -6213,7 +6239,7 @@ function createStyles(colors: typeof lightColors) {
     minHeight: 76,
     position: "absolute",
     right: 22,
-    top: 10,
+    top: Platform.OS === "android" ? 34 : 10,
     zIndex: 80
   },
   headerGreetingWrap: {
