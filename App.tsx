@@ -5159,12 +5159,13 @@ function MatchDetailsModal({
 
           <ScrollView
             style={styles.modalScroll}
-            contentContainerStyle={styles.details}
+            contentContainerStyle={[styles.details, styles.matchDetailsContent]}
             scrollEnabled
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
             showsVerticalScrollIndicator
+            overScrollMode="always"
           >
             <View style={[styles.matchCard, { borderColor: statusStyle.border }]}>
               <View style={styles.cardTop}>
@@ -7513,7 +7514,8 @@ function createStyles(colors: typeof lightColors) {
     flexGrow: 1,
     gap: 12,
     padding: 18,
-    paddingBottom: Platform.OS === "android" ? 110 : 36
+    minHeight: Platform.OS === "android" ? 900 : undefined,
+    paddingBottom: Platform.OS === "android" ? 160 : 36
   },
   closeButton: {
     alignItems: "center",
