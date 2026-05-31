@@ -5143,22 +5143,24 @@ function MatchDetailsModal({
           </Pressable>
         </View>
 
-        <ScrollView
-          style={styles.modalScroll}
-          contentContainerStyle={styles.details}
-          keyboardDismissMode="on-drag"
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled
-          showsVerticalScrollIndicator
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor={colors.greenDark}
-              colors={[colors.greenDark]}
-            />
-          }
-        >
+        <View style={styles.matchDetailsBody}>
+          <ScrollView
+            style={styles.matchDetailsScroll}
+            contentContainerStyle={styles.matchDetailsContent}
+            scrollEnabled
+            keyboardDismissMode="on-drag"
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={colors.greenDark}
+                colors={[colors.greenDark]}
+              />
+            }
+          >
           <MatchCard match={match} hasMyRequest={Boolean(myRequest)} onPress={() => undefined} />
 
           <Text style={styles.sectionTitle}>Kampinfo</Text>
@@ -5245,7 +5247,8 @@ function MatchDetailsModal({
               </Pressable>
             </View>
           )}
-        </ScrollView>
+          </ScrollView>
+        </View>
       </SafeAreaView>
     </Modal>
   );
@@ -7478,6 +7481,19 @@ function createStyles(colors: typeof lightColors) {
     justifyContent: "flex-end",
     paddingHorizontal: 18,
     paddingTop: 10
+  },
+  matchDetailsBody: {
+    flex: 1,
+    minHeight: 0
+  },
+  matchDetailsScroll: {
+    flex: 1
+  },
+  matchDetailsContent: {
+    flexGrow: 1,
+    gap: 12,
+    padding: 18,
+    paddingBottom: Platform.OS === "android" ? 110 : 36
   },
   closeButton: {
     alignItems: "center",
