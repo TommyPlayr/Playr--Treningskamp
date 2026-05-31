@@ -5150,29 +5150,21 @@ function MatchDetailsModal({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
         >
-        <View style={styles.matchModalHeader}>
-          <Pressable onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color={colors.text} />
-          </Pressable>
-        </View>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Kamp</Text>
+            <Pressable onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </Pressable>
+          </View>
 
-        <View style={styles.matchDetailsBody}>
           <ScrollView
-            style={styles.matchDetailsScroll}
-            contentContainerStyle={styles.matchDetailsContent}
+            style={styles.modalScroll}
+            contentContainerStyle={styles.details}
             scrollEnabled
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
             showsVerticalScrollIndicator
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor={colors.greenDark}
-                colors={[colors.greenDark]}
-              />
-            }
           >
             <View style={[styles.matchCard, { borderColor: statusStyle.border }]}>
               <View style={styles.cardTop}>
@@ -5276,7 +5268,6 @@ function MatchDetailsModal({
             </View>
           )}
           </ScrollView>
-        </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
