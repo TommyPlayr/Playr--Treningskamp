@@ -5143,9 +5143,8 @@ function MatchDetailsModal({
     match.place
   ].filter(Boolean);
 
-  return (
-    <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
-      <SafeAreaView style={styles.modalSafe}>
+  const content = (
+      <SafeAreaView style={[styles.modalSafe, Platform.OS === "android" && styles.requestDetailsOverlay]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
@@ -5271,6 +5270,15 @@ function MatchDetailsModal({
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
+  );
+
+  if (Platform.OS === "android") {
+    return content;
+  }
+
+  return (
+    <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
+      {content}
     </Modal>
   );
 }
