@@ -29,7 +29,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const openSansFont = {
@@ -733,9 +733,11 @@ export default function App() {
   }
 
   return (
-    <StartupErrorBoundary>
-      <PlayrApp themeMode={themeMode} onToggleTheme={toggleThemeMode} />
-    </StartupErrorBoundary>
+    <SafeAreaProvider>
+      <StartupErrorBoundary>
+        <PlayrApp themeMode={themeMode} onToggleTheme={toggleThemeMode} />
+      </StartupErrorBoundary>
+    </SafeAreaProvider>
   );
 }
 
