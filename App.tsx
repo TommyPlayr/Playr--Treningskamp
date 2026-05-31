@@ -5133,10 +5133,23 @@ function MatchDetailsModal({
   const isOwnMatch = match.hostTeamId === profile.id;
   const requestButtonDisabled =
     isSendingRequest || match.status === "avtalt" || Boolean(myRequest && myRequest.status !== "avslatt");
+  const statusStyle = getMatchStatusStyle(match.status);
+  const cardTitle = getMatchDisplayTitle(match, approvedRequest);
+  const metaParts = [
+    formatSport(match.sport),
+    getAgeGroupDisplay(match.ageGroup),
+    getVisibleLevel(match.level),
+    `${match.date} ${match.time}`,
+    match.place
+  ].filter(Boolean);
 
   return (
     <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalKeyboard}
+        >
         <View style={styles.matchModalHeader}>
           <Pressable onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={24} color={colors.text} />
@@ -5161,7 +5174,22 @@ function MatchDetailsModal({
               />
             }
           >
-          <MatchCard match={match} hasMyRequest={Boolean(myRequest)} onPress={() => undefined} />
+            <View style={[styles.matchCard, { borderColor: statusStyle.border }]}>
+              <View style={styles.cardTop}>
+                <View style={styles.cardText}>
+                  <Text style={styles.cardTitle}>{cardTitle}</Text>
+                </View>
+                <View style={styles.cardStatusStack}>
+                  <View style={[styles.statusBadge, { backgroundColor: statusStyle.background }]}>
+                    <Text style={[styles.statusText, { color: statusStyle.text }]}>{match.status}</Text>
+                  </View>
+                </View>
+              </View>
+
+              <Text style={styles.cardCompactMeta} numberOfLines={1}>
+                {metaParts.join(" · ")}
+              </Text>
+            </View>
 
           <Text style={styles.sectionTitle}>Kampinfo</Text>
           <DetailRow label="Idrett" value={formatSport(match.sport)} />
@@ -5249,6 +5277,7 @@ function MatchDetailsModal({
           )}
           </ScrollView>
         </View>
+        </KeyboardAvoidingView>
       </SafeAreaView>
     </Modal>
   );
