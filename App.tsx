@@ -29,6 +29,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const openSansFont = {
@@ -5476,6 +5477,8 @@ function BottomTabs({
   onChange: (tab: Tab) => void;
   badges?: TabBadges;
 }) {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 24) : insets.bottom;
   const tabs: Array<{ key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
     { key: "home", label: "Hjem", icon: "home-outline" },
     { key: "matches", label: "Ledige kamper", icon: "paper-plane-outline" },
@@ -5484,7 +5487,7 @@ function BottomTabs({
   ];
 
   return (
-    <View style={styles.tabs}>
+    <View style={[styles.tabs, { paddingBottom: 8 + bottomInset }]}>
       {tabs.map((tab) => {
         const active = activeTab === tab.key;
         const badgeCount = badges[tab.key] ?? 0;
@@ -8021,8 +8024,7 @@ function createStyles(colors: typeof lightColors) {
     borderTopColor: colors.border,
     borderTopWidth: 1,
     flexDirection: "row",
-    minHeight: 76,
-    paddingBottom: 8,
+    minHeight: 84,
     paddingTop: 8
   },
   tabButton: {
