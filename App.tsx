@@ -3,6 +3,7 @@ import { Component, useCallback, useEffect, useMemo, useRef, useState, type Reac
 import {
   Alert,
   ActivityIndicator,
+  AppState,
   FlatList,
   KeyboardAvoidingView,
   Linking,
@@ -812,6 +813,27 @@ function PlayrApp({
         teamProfiles.find((profile) => profile.id === selectedRequest.fromTeamId) ??
         currentProfile
       : currentProfile;
+
+  useEffect(() => {
+    if (!supabase || Platform.OS === "web") {
+      return;
+    }
+
+    supabase.auth.startAutoRefresh();
+
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        supabase.auth.startAutoRefresh();
+      } else {
+        supabase.auth.stopAutoRefresh();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      supabase.auth.stopAutoRefresh();
+    };
+  }, []);
 
   const getNotificationCountsForProfile = (profileId: string) => {
     const hostedIds = new Set(
