@@ -1073,6 +1073,39 @@ function PlayrApp({
       setIsRefreshingData(false);
     }
   }, [isRefreshingData, loadAppData]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !supabase || !authUserId) {
+      return;
+    }
+
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+      }
+
+      refreshTimer = setTimeout(() => {
+        loadAppData().catch(() => undefined);
+      }, 700);
+    };
+
+    const channel = supabase
+      .channel(`playr-app-data-${authUserId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "matches" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "match_requests" }, scheduleRefresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: "chat_messages" }, scheduleRefresh)
+      .subscribe();
+
+    return () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+      }
+
+      supabase.removeChannel(channel);
+    };
+  }, [authUserId, loadAppData]);
+
   const markApprovedRequestsAsSeen = useCallback(() => {
     if (!currentProfile.id || visibleApprovedNotificationCount <= 0) {
       return;
@@ -1809,6 +1842,7 @@ function PlayrApp({
           setRequests((current) =>
             replaceRequest(current, request.id, mapDatabaseRequest(updatedRequest as DatabaseRequestRow))
           );
+          await loadAppData();
           return;
         }
 
@@ -1834,6 +1868,8 @@ function PlayrApp({
           const savedRequest = mapDatabaseRequest(data as DatabaseRequestRow);
           setRequests((current) => replaceRequest(current, request.id, savedRequest));
         }
+
+        await loadAppData();
       }
     } finally {
       setIsSendingRequest(false);
@@ -1886,6 +1922,18 @@ function PlayrApp({
         if (smsError || (smsData && smsData.ok === false)) {
           console.warn("Kamp ble avtalt, men SMS-bekreftelse feilet.", smsError ?? smsData);
         }
+
+        if (smsError || smsData?.queued > 0) {
+          [7000, 20000].forEach((delay) => {
+            setTimeout(() => {
+              supabase.functions
+                .invoke("match-confirmation-sms", { body: { requestId: request.id } })
+                .catch(() => undefined);
+            }, delay);
+          });
+        }
+
+        await loadAppData();
       } catch (error) {
         Alert.alert("Kampen ble ikke godkjent", getReadableErrorMessage(error));
       }
@@ -2406,6 +2454,7 @@ function PlayrApp({
           }
         }
 
+        await loadAppData();
         setEditingMessageId(null);
         setMessageText("");
       } catch (error) {
@@ -2534,6 +2583,8 @@ function PlayrApp({
       if (error) {
         throw error;
       }
+
+      await loadAppData();
     } catch (error) {
       if (chatMessage) {
         setMessages((current) => current.filter((message) => message.id !== chatMessage?.id));
