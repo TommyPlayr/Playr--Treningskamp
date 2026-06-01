@@ -1878,6 +1878,14 @@ function PlayrApp({
           .from("matches")
           .update({ status: "avtalt", approved_request_id: request.id })
           .eq("id", request.matchId);
+
+        const { data: smsData, error: smsError } = await supabase.functions.invoke("match-confirmation-sms", {
+          body: { requestId: request.id }
+        });
+
+        if (smsError || (smsData && smsData.ok === false)) {
+          console.warn("Kamp ble avtalt, men SMS-bekreftelse feilet.", smsError ?? smsData);
+        }
       } catch (error) {
         Alert.alert("Kampen ble ikke godkjent", getReadableErrorMessage(error));
       }
