@@ -5362,15 +5362,17 @@ function MatchDetailsModal({
                   </Text>
                 </Pressable>
               ) : null}
-              <Pressable
-                style={[styles.dangerButton, isDeletingMatch && styles.disabledButton]}
-                disabled={isDeletingMatch}
-                onPress={() => onDeleteMatch(match)}
-              >
-                <Text style={styles.dangerButtonText}>
-                  {isDeletingMatch ? "Sletter..." : "Slett kamp"}
-                </Text>
-              </Pressable>
+              {match.status !== "avtalt" ? (
+                <Pressable
+                  style={[styles.dangerButton, isDeletingMatch && styles.disabledButton]}
+                  disabled={isDeletingMatch}
+                  onPress={() => onDeleteMatch(match)}
+                >
+                  <Text style={styles.dangerButtonText}>
+                    {isDeletingMatch ? "Sletter..." : "Slett kamp"}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           )}
           </ScrollView>
