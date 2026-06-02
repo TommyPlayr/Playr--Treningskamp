@@ -5561,7 +5561,7 @@ function BottomTabs({
   badges?: TabBadges;
 }) {
   const insets = useSafeAreaInsets();
-  const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 24) : insets.bottom;
+  const bottomInset = Platform.OS === "android" ? Math.max(insets.bottom, 36) : insets.bottom;
   const tabs: Array<{ key: Tab; label: string; icon: keyof typeof Ionicons.glyphMap }> = [
     { key: "home", label: "Hjem", icon: "home-outline" },
     { key: "matches", label: "Ledige kamper", icon: "paper-plane-outline" },
@@ -6305,7 +6305,7 @@ function createStyles(colors: typeof lightColors) {
     flexGrow: 1,
     justifyContent: "center",
     padding: 28,
-    paddingBottom: 44,
+    paddingBottom: Platform.OS === "android" ? 76 : 44,
     position: "relative"
   },
   authTitle: {
@@ -6418,7 +6418,7 @@ function createStyles(colors: typeof lightColors) {
   profileSetupContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingBottom: 28,
+    paddingBottom: Platform.OS === "android" ? 76 : 28,
     paddingHorizontal: 0,
     paddingTop: 18
   },
