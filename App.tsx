@@ -2053,6 +2053,28 @@ function PlayrApp({
         if (matchError) {
           throw matchError;
         }
+
+        const { data: smsData, error: smsError } = await supabase.functions.invoke("match-confirmation-sms", {
+          body: { requestId: approvedRequest.id, messageType: "cancellation" }
+        });
+
+        if (smsError || (smsData && smsData.ok === false)) {
+          console.warn("Kamp ble avlyst, men SMS-varsel feilet.", smsError ?? smsData);
+        }
+
+        if (smsError || smsData?.queued > 0) {
+          [7000, 20000].forEach((delay) => {
+            setTimeout(() => {
+              supabase.functions
+                .invoke("match-confirmation-sms", {
+                  body: { requestId: approvedRequest.id, messageType: "cancellation" }
+                })
+                .catch(() => undefined);
+            }, delay);
+          });
+        }
+
+        await loadAppData();
       }
 
       setSelectedMatchId(null);
