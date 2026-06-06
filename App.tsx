@@ -2798,12 +2798,6 @@ function PlayrApp({
           title={getTabTitle(activeTab)}
           profile={currentProfile}
           profiles={teamProfiles}
-          notificationCount={
-            visibleIncomingNotificationCount +
-            visibleApprovedNotificationCount +
-            visibleChatNotificationCount +
-            visibleMatchingMatchNotificationCount
-          }
           onSelectProfile={(profileId) => {
             const profile = teamProfiles.find((teamProfile) => teamProfile.id === profileId);
             if (profile) {
@@ -2919,7 +2913,6 @@ function Header({
   title,
   profile,
   profiles,
-  notificationCount,
   onSelectProfile,
   showHomeLogo,
   showHomeVision
@@ -2927,7 +2920,6 @@ function Header({
   title: string;
   profile: TeamProfile;
   profiles: TeamProfile[];
-  notificationCount: number;
   onSelectProfile: (profileId: string) => void;
   showHomeLogo: boolean;
   showHomeVision: boolean;
@@ -3005,19 +2997,11 @@ function Header({
                 ) : null}
               </>
             ) : (
-              <Text style={styles.headerProfileTeam} numberOfLines={1}>
-                {formatProfileTeamLine(profile)}
-              </Text>
-            )}
-          </View>
-          <View style={styles.headerStatusRow}>
-            <View style={styles.headerStatusChip}>
-              <Ionicons name="notifications-outline" size={13} color="#FFFFFF" />
-              <Text style={styles.headerStatusText}>
-                {notificationCount === 1 ? "1 varsel" : `${notificationCount} varsler`}
-              </Text>
-            </View>
-          </View>
+            <Text style={styles.headerProfileTeam} numberOfLines={1}>
+              {formatProfileTeamLine(profile)}
+            </Text>
+          )}
+        </View>
         </View>
       )}
       {showHomeLogo ? <PlayrLogo compact /> : null}
@@ -6639,29 +6623,6 @@ function createStyles(colors: typeof lightColors) {
     shadowOpacity: 0.42,
     shadowRadius: 18,
     zIndex: 120
-  },
-  headerStatusRow: {
-    bottom: 18,
-    flexDirection: "row",
-    gap: 8,
-    left: 0,
-    position: "absolute"
-  },
-  headerStatusChip: {
-    alignItems: "center",
-    backgroundColor: "rgba(12, 27, 20, 0.13)",
-    borderColor: "rgba(255, 255, 255, 0.18)",
-    borderRadius: 999,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: 5,
-    minHeight: 26,
-    paddingHorizontal: 9
-  },
-  headerStatusText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontWeight: "700"
   },
   headerTeamMenuItem: {
     alignItems: "center",
