@@ -2036,22 +2036,14 @@ function PlayrApp({
 
     try {
       if (isSupabaseConfigured && supabase) {
-        const { error: requestError } = await supabase
-          .from("match_requests")
-          .update({ status: "avslatt" })
-          .eq("id", approvedRequest.id);
+        const { data: cancelData, error: cancelError } = await supabase.functions.invoke("cancel-agreed-match", {
+          body: { requestId: approvedRequest.id }
+        });
 
-        if (requestError) {
-          throw requestError;
-        }
-
-        const { error: matchError } = await supabase
-          .from("matches")
-          .update({ status: "ledig", approved_request_id: null })
-          .eq("id", match.id);
-
-        if (matchError) {
-          throw matchError;
+        if (cancelError || (cancelData && cancelData.ok === false)) {
+          const cancelMessage =
+            cancelData && typeof cancelData.error === "string" ? cancelData.error : "Kampen ble ikke avlyst.";
+          throw cancelError ?? new Error(cancelMessage);
         }
 
         const { data: smsData, error: smsError } = await supabase.functions.invoke("match-confirmation-sms", {
