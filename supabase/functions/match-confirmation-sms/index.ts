@@ -8,6 +8,7 @@ const corsHeaders = {
 
 type RequestBody = {
   requestId?: string;
+  messageType?: "confirmation" | "cancellation";
 };
 
 type MatchRequestRow = {
@@ -105,7 +106,7 @@ function formatTime(value: string | null) {
   return value ? value.slice(0, 5) : "Ikke satt";
 }
 
-function buildMessage(match: MatchRow, approvedRequest: MatchRequestRow) {
+function buildConfirmationMessage(match: MatchRow, approvedRequest: MatchRequestRow) {
   const hostTeam = formatTeamName(match.teams);
   const awayTeam = formatTeamName(approvedRequest.teams);
   const ageAndLevel = [match.age_group, match.level].filter(Boolean).join(" - ");
@@ -121,6 +122,31 @@ function buildMessage(match: MatchRow, approvedRequest: MatchRequestRow) {
     "",
     "Bruk Playr-chatten ved endringer."
   ].join("\n");
+}
+
+function buildCancellationMessage(match: MatchRow, approvedRequest: MatchRequestRow) {
+  const hostTeam = formatTeamName(match.teams);
+  const awayTeam = formatTeamName(approvedRequest.teams);
+
+  return [
+    "Playr: Kamp avlyst",
+    "",
+    `${hostTeam} - ${awayTeam}`,
+    `Dato: ${formatDate(match.match_date)}`,
+    `Tid: ${formatTime(match.match_time)}`,
+    `Sted: ${match.place}`,
+    "",
+    "Kampen er avlyst i Playr."
+  ].join("\n");
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function getNextAttemptAt(attempts: number) {
+  const delaySeconds = Math.min(60, Math.max(5, attempts * attempts * 5));
+  return new Date(Date.now() + delaySeconds * 1000).toISOString();
 }
 
 async function sendSms(phone: string, body: string) {
@@ -189,7 +215,7 @@ Deno.serve(async (request) => {
   const { data: userData, error: userError } = await supabase.auth.getUser(token);
 
   if (userError || !userData.user) {
-    return jsonResponse({ error: "Du må være innlogget for å sende kampbekreftelse." }, 401);
+    return jsonResponse({ error: "Du maa vaere innlogget for aa sende kamp-SMS." }, 401);
   }
 
   const body = (await request.json().catch(() => ({}))) as RequestBody;
@@ -198,6 +224,8 @@ Deno.serve(async (request) => {
     return jsonResponse({ error: "requestId mangler." }, 400);
   }
 
+  const messageType = body.messageType === "cancellation" ? "cancellation" : "confirmation";
+
   const { data: approvedRequest, error: requestError } = await supabase
     .from("match_requests")
     .select("id, match_id, from_team_id, status, teams(club, team, contact_name, users(phone))")
@@ -205,17 +233,19 @@ Deno.serve(async (request) => {
     .maybeSingle();
 
   if (requestError || !approvedRequest) {
-    return jsonResponse({ error: requestError?.message ?? "Forespørselen finnes ikke." }, 404);
+    return jsonResponse({ error: requestError?.message ?? "Foresporselen finnes ikke." }, 404);
   }
 
-  if ((approvedRequest as MatchRequestRow).status !== "godkjent") {
-    return jsonResponse({ error: "Forespørselen er ikke godkjent." }, 409);
+  const requestRow = approvedRequest as MatchRequestRow;
+
+  if (messageType === "confirmation" && requestRow.status !== "godkjent") {
+    return jsonResponse({ error: "Foresporselen er ikke godkjent." }, 409);
   }
 
   const { data: match, error: matchError } = await supabase
     .from("matches")
     .select("id, sport, age_group, level, match_date, match_time, place, status, approved_request_id, teams(club, team, contact_name, users(phone))")
-    .eq("id", (approvedRequest as MatchRequestRow).match_id)
+    .eq("id", requestRow.match_id)
     .maybeSingle();
 
   if (matchError || !match) {
@@ -223,51 +253,121 @@ Deno.serve(async (request) => {
   }
 
   const matchRow = match as MatchRow;
-  const requestRow = approvedRequest as MatchRequestRow;
 
-  if (matchRow.status !== "avtalt" || matchRow.approved_request_id !== requestRow.id) {
-    return jsonResponse({ error: "Kampen er ikke avtalt med denne forespørselen." }, 409);
+  if (
+    messageType === "confirmation" &&
+    (matchRow.status !== "avtalt" || matchRow.approved_request_id !== requestRow.id)
+  ) {
+    return jsonResponse({ error: "Kampen er ikke avtalt med denne foresporselen." }, 409);
   }
 
-  const message = buildMessage(matchRow, requestRow);
+  const message =
+    messageType === "cancellation"
+      ? buildCancellationMessage(matchRow, requestRow)
+      : buildConfirmationMessage(matchRow, requestRow);
+
   const recipients = [
     { role: "host", phone: normalizePhone(matchRow.teams?.users?.phone) },
     { role: "away", phone: normalizePhone(requestRow.teams?.users?.phone) }
   ].filter((recipient) => recipient.phone);
 
   if (recipients.length === 0) {
-    return jsonResponse({ ok: true, sent: 0, skipped: 0, message: "Ingen telefonnummer å sende til." });
+    return jsonResponse({ ok: true, sent: 0, skipped: 0, message: "Ingen telefonnummer aa sende til." });
+  }
+
+  for (const recipient of recipients) {
+    const { error: queueError } = await supabase
+      .from("match_confirmation_sms_log")
+      .upsert(
+        {
+          match_id: matchRow.id,
+          request_id: requestRow.id,
+          phone: recipient.phone,
+          recipient_role: recipient.role,
+          message_type: messageType,
+          message_body: message,
+          status: "pending",
+          error: null
+        },
+        { onConflict: "request_id,phone,message_type", ignoreDuplicates: true }
+      );
+
+    if (queueError) {
+      return jsonResponse({ ok: false, error: queueError.message }, 500);
+    }
+  }
+
+  await supabase
+    .from("match_confirmation_sms_log")
+    .update({
+      status: "pending",
+      next_attempt_at: new Date().toISOString()
+    })
+    .eq("status", "sending")
+    .lt("last_attempt_at", new Date(Date.now() - 2 * 60 * 1000).toISOString())
+    .lt("attempts", 4);
+
+  const { data: queuedRows, error: queuedError } = await supabase
+    .from("match_confirmation_sms_log")
+    .select("id, phone, attempts, status, message_body")
+    .in("status", ["pending", "failed"])
+    .lte("next_attempt_at", new Date().toISOString())
+    .lt("attempts", 4)
+    .order("next_attempt_at", { ascending: true })
+    .limit(10);
+
+  if (queuedError) {
+    return jsonResponse({ ok: false, error: queuedError.message }, 500);
   }
 
   let sent = 0;
-  let skipped = 0;
+  let queued = 0;
   const errors: string[] = [];
 
-  for (const recipient of recipients) {
-    const { data: existingLog } = await supabase
+  for (const row of queuedRows ?? []) {
+    const nextAttempts = (row.attempts ?? 0) + 1;
+    const { data: claimedRow, error: claimError } = await supabase
       .from("match_confirmation_sms_log")
+      .update({
+        status: "sending",
+        attempts: nextAttempts,
+        last_attempt_at: new Date().toISOString()
+      })
+      .eq("id", row.id)
+      .in("status", ["pending", "failed"])
+      .lt("attempts", 4)
       .select("id")
-      .eq("request_id", requestRow.id)
-      .eq("phone", recipient.phone)
       .maybeSingle();
 
-    if (existingLog) {
-      skipped += 1;
+    if (claimError) {
+      errors.push(claimError.message);
       continue;
     }
 
-    const result = await sendSms(recipient.phone, message);
+    if (!claimedRow) {
+      continue;
+    }
+
+    const result = await sendSms(row.phone, row.message_body || message);
+    const shouldRetry = !result.ok && (result.status === 429 || result.status >= 500) && nextAttempts < 4;
+    const nextStatus = result.ok ? "sent" : shouldRetry ? "pending" : "failed";
+    const errorMessage = result.ok ? null : result.data?.message ?? "Kunne ikke sende SMS.";
+
+    const updatePayload: Record<string, unknown> = {
+      status: nextStatus,
+      twilio_sid: result.data?.sid ?? null,
+      error: errorMessage,
+      next_attempt_at: shouldRetry ? getNextAttemptAt(nextAttempts) : new Date().toISOString()
+    };
+
+    if (result.ok) {
+      updatePayload.sent_at = new Date().toISOString();
+    }
 
     const { error: logError } = await supabase
       .from("match_confirmation_sms_log")
-      .insert({
-        match_id: matchRow.id,
-        request_id: requestRow.id,
-        phone: recipient.phone,
-        recipient_role: recipient.role,
-        twilio_sid: result.data?.sid ?? null,
-        error: result.ok ? null : result.data?.message ?? "Kunne ikke sende SMS."
-      });
+      .update(updatePayload)
+      .eq("id", row.id);
 
     if (logError) {
       errors.push(logError.message);
@@ -276,9 +376,14 @@ Deno.serve(async (request) => {
     if (result.ok) {
       sent += 1;
     } else {
-      errors.push(result.data?.message ?? "Kunne ikke sende SMS.");
+      errors.push(errorMessage ?? "Kunne ikke sende SMS.");
+      if (shouldRetry) {
+        queued += 1;
+      }
     }
+
+    await wait(750);
   }
 
-  return jsonResponse({ ok: errors.length === 0, sent, skipped, errors });
+  return jsonResponse({ ok: errors.length === 0, sent, queued, errors });
 });
