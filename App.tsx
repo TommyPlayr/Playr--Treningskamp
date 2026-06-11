@@ -783,6 +783,8 @@ function PlayrApp({
   const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
   const [editForm, setEditForm] = useState(createEmptyForm(fallbackProfile));
+  const [matchesSportFilter, setMatchesSportFilter] = useState<Sport | "Alle">("Alle");
+  const [matchesAgeFilter, setMatchesAgeFilter] = useState("Alle");
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -2664,10 +2666,14 @@ function PlayrApp({
           profile={currentProfile}
           matches={matches}
           requests={requests}
+          sportFilter={matchesSportFilter}
+          ageFilter={matchesAgeFilter}
           refreshing={isRefreshingData}
           onRefresh={refreshAppData}
           onOpenMatch={(id) => setSelectedMatchId(id)}
           onCreateMatch={openCreateMatch}
+          onSportFilterChange={setMatchesSportFilter}
+          onAgeFilterChange={setMatchesAgeFilter}
         />
       );
     }
@@ -4428,21 +4434,27 @@ function MatchesScreen({
   profile,
   matches,
   requests,
+  sportFilter,
+  ageFilter,
   refreshing,
   onRefresh,
   onOpenMatch,
-  onCreateMatch
+  onCreateMatch,
+  onSportFilterChange,
+  onAgeFilterChange
 }: {
   profile: TeamProfile;
   matches: Match[];
   requests: MatchRequest[];
+  sportFilter: Sport | "Alle";
+  ageFilter: string;
   refreshing: boolean;
   onRefresh: () => void;
   onOpenMatch: (id: string) => void;
   onCreateMatch: () => void;
+  onSportFilterChange: (value: Sport | "Alle") => void;
+  onAgeFilterChange: (value: string) => void;
 }) {
-  const [sportFilter, setSportFilter] = useState<Sport | "Alle">("Alle");
-  const [ageFilter, setAgeFilter] = useState("Alle");
   const [searchText, setSearchText] = useState("");
   const [openFilter, setOpenFilter] = useState<"sport" | "age" | null>(null);
 
@@ -4511,9 +4523,9 @@ function MatchesScreen({
                   style={[styles.filterOption, isSelected && styles.filterOptionActive]}
                   onPress={() => {
                     if (openFilter === "sport") {
-                      setSportFilter(option as Sport | "Alle");
+                      onSportFilterChange(option as Sport | "Alle");
                     } else {
-                      setAgeFilter(option);
+                      onAgeFilterChange(option);
                     }
                     setOpenFilter(null);
                   }}
