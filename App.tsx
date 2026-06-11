@@ -4432,9 +4432,9 @@ function HomeScreen({
     >
       <PlayrPattern />
       <PlayrLogo />
-      <Text style={styles.heroTitle}>En enklere hverdag for trenere.</Text>
+      <Text style={styles.heroTitle}>Markedsplassen der neste kamp starter.</Text>
       <Text style={styles.heroText}>
-        Markedsplassen der neste kamp starter.
+        En enklere hverdag for trenere.
       </Text>
 
       <View style={styles.homeActions}>
