@@ -4768,6 +4768,7 @@ function MineScreen({
   onOpenRequest: (id: string) => void;
 }) {
   const [requestView, setRequestView] = useState<"incoming" | "hosted" | "sent">("incoming");
+  const [statsView, setStatsView] = useState<"overview" | "agreed" | "completed">("overview");
   const allProfiles = profiles.some((teamProfile) => teamProfile.id === profile.id)
     ? profiles
     : [profile, ...profiles];
@@ -4779,11 +4780,17 @@ function MineScreen({
     .map((request) => matches.find((match) => match.id === request.matchId))
     .filter((match): match is Match => Boolean(match))
     .filter((match) => !ownedHostedMatches.some((hostedMatch) => hostedMatch.id === match.id));
-  const myMatches = [...ownedHostedMatches, ...approvedRequestMatches];
-  const agreedMyMatches = myMatches.filter((match) => match.status === "avtalt").length;
-  const completedMyMatches = myMatches.filter(
+  const myMatches = Array.from(
+    new Map([...ownedHostedMatches, ...approvedRequestMatches].map((match) => [match.id, match])).values()
+  );
+  const agreedMatchesForAllProfiles = myMatches
+    .filter((match) => match.status === "avtalt")
+    .sort((a, b) => getMatchDateSortValue(a) - getMatchDateSortValue(b));
+  const completedMatchesForAllProfiles = agreedMatchesForAllProfiles.filter(
     (match) => match.status === "avtalt" && getMatchDateSortValue(match) < Date.now()
-  ).length;
+  );
+  const agreedMyMatches = agreedMatchesForAllProfiles.length;
+  const completedMyMatches = completedMatchesForAllProfiles.length;
   const activeHostedMatches = ownedHostedMatches
     .filter((match) => match.status !== "avtalt")
     .sort((a, b) => getMatchDateSortValue(a) - getMatchDateSortValue(b));
@@ -4808,6 +4815,60 @@ function MineScreen({
     { key: "hosted" as const, label: "Kamper", count: activeHostedMatches.length },
     { key: "sent" as const, label: "Sendte", count: activeMyRequests.length }
   ];
+
+  if (statsView !== "overview") {
+    const detailMatches =
+      statsView === "completed" ? completedMatchesForAllProfiles : agreedMatchesForAllProfiles;
+    const detailTitle = statsView === "completed" ? "Gjennomførte kamper" : "Alle avtalte kamper";
+    const detailText =
+      statsView === "completed"
+        ? "Kamper som er avtalt og der kampdatoen er passert, samlet for alle lagprofilene dine."
+        : "Alle avtalte kamper samlet for alle lagprofilene dine.";
+
+    return (
+      <ScrollView
+        contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.greenDark}
+            colors={[colors.greenDark]}
+          />
+        }
+      >
+        <View style={styles.mineStatsDetailHeader}>
+          <Pressable style={styles.mineStatsBackButton} onPress={() => setStatsView("overview")}>
+            <Ionicons name="chevron-back" size={18} color={colors.greenDark} />
+            <Text style={styles.signOutText}>Tilbake</Text>
+          </Pressable>
+          <Text style={styles.sectionTitle}>{detailTitle}</Text>
+          <Text style={styles.mineStatsDetailText}>{detailText}</Text>
+        </View>
+
+        {detailMatches.length === 0 ? <EmptyState text="Ingen kamper å vise enda." /> : null}
+        {detailMatches.map((match) => {
+          const approvedRequest = requests.find((request) => request.id === match.approvedRequestId);
+          const hasMyRequest = requests.some(
+            (request) =>
+              request.matchId === match.id &&
+              ownedTeamIds.has(request.fromTeamId) &&
+              request.status === "godkjent"
+          );
+
+          return (
+            <MatchCard
+              key={match.id}
+              match={match}
+              hasMyRequest={hasMyRequest}
+              approvedRequest={approvedRequest}
+              onPress={() => onOpenMatch(match.id)}
+            />
+          );
+        })}
+      </ScrollView>
+    );
+  }
 
   return (
     <ScrollView
@@ -4863,14 +4924,14 @@ function MineScreen({
       </View>
 
       <View style={styles.mineStats}>
-        <View style={styles.mineStatItem}>
+        <Pressable style={styles.mineStatItem} onPress={() => setStatsView("agreed")}>
           <Text style={styles.mineStatNumber}>{agreedMyMatches}</Text>
           <Text style={styles.mineStatLabel}>Antall avtalte kamper</Text>
-        </View>
-        <View style={styles.mineStatItem}>
+        </Pressable>
+        <Pressable style={styles.mineStatItem} onPress={() => setStatsView("completed")}>
           <Text style={styles.mineStatNumber}>{completedMyMatches}</Text>
           <Text style={styles.mineStatLabel}>Gjennomførte kamper</Text>
-        </View>
+        </Pressable>
       </View>
 
       <View style={styles.requestTabs}>
@@ -7379,6 +7440,26 @@ function createStyles(colors: typeof lightColors) {
     fontWeight: "800",
     marginTop: 3,
     textAlign: "center"
+  },
+  mineStatsDetailHeader: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    gap: 8,
+    padding: 14
+  },
+  mineStatsBackButton: {
+    alignItems: "center",
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    gap: 4,
+    minHeight: 34
+  },
+  mineStatsDetailText: {
+    color: colors.muted,
+    fontSize: 14,
+    lineHeight: 19
   },
   requestTabs: {
     backgroundColor: colors.cardSoft,
