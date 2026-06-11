@@ -4434,7 +4434,7 @@ function HomeScreen({
       <PlayrLogo />
       <Text style={styles.heroTitle}>En enklere hverdag for trenere.</Text>
       <Text style={styles.heroText}>
-        Finn og avtal treningskamper raskt og enkelt.
+        Markedsplassen der neste kamp starter.
       </Text>
 
       <View style={styles.homeActions}>
