@@ -798,6 +798,7 @@ function PlayrApp({
   const [editForm, setEditForm] = useState(createEmptyForm(fallbackProfile));
   const [matchesSportFilter, setMatchesSportFilter] = useState<Sport | "Alle">("Alle");
   const [matchesAgeFilter, setMatchesAgeFilter] = useState("Alle");
+  const [matchesMonthFilter, setMatchesMonthFilter] = useState("Alle");
   const [authReady, setAuthReady] = useState(!isSupabaseConfigured);
   const [userEmail, setUserEmail] = useState<string | null>(null);
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -2691,12 +2692,14 @@ function PlayrApp({
           requests={requests}
           sportFilter={matchesSportFilter}
           ageFilter={matchesAgeFilter}
+          monthFilter={matchesMonthFilter}
           refreshing={isRefreshingData}
           onRefresh={refreshAppData}
           onOpenMatch={(id) => setSelectedMatchId(id)}
           onCreateMatch={openCreateMatch}
           onSportFilterChange={setMatchesSportFilter}
           onAgeFilterChange={setMatchesAgeFilter}
+          onMonthFilterChange={setMatchesMonthFilter}
         />
       );
     }
@@ -4451,27 +4454,31 @@ function MatchesScreen({
   requests,
   sportFilter,
   ageFilter,
+  monthFilter,
   refreshing,
   onRefresh,
   onOpenMatch,
   onCreateMatch,
   onSportFilterChange,
-  onAgeFilterChange
+  onAgeFilterChange,
+  onMonthFilterChange
 }: {
   profile: TeamProfile;
   matches: Match[];
   requests: MatchRequest[];
   sportFilter: Sport | "Alle";
   ageFilter: string;
+  monthFilter: string;
   refreshing: boolean;
   onRefresh: () => void;
   onOpenMatch: (id: string) => void;
   onCreateMatch: () => void;
   onSportFilterChange: (value: Sport | "Alle") => void;
   onAgeFilterChange: (value: string) => void;
+  onMonthFilterChange: (value: string) => void;
 }) {
   const [searchText, setSearchText] = useState("");
-  const [openFilter, setOpenFilter] = useState<"sport" | "age" | null>(null);
+  const [openFilter, setOpenFilter] = useState<"sport" | "age" | "month" | null>(null);
 
   const sportOptions: Array<Sport | "Alle"> = ["Alle", "Fotball", "Handball"];
 
@@ -4483,7 +4490,21 @@ function MatchesScreen({
     [matches]
   );
   const ageFilterOptions = ["Alle", ...ageOptions];
-  const activeFilterOptions = openFilter === "sport" ? sportOptions : ageFilterOptions;
+  const monthOptions = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          matches
+            .filter((match) => match.status === "ledig" && !isMatchExpired(match))
+            .map(getMatchMonthKey)
+            .filter(Boolean)
+        )
+      ).sort(),
+    [matches]
+  );
+  const monthFilterOptions = ["Alle", ...monthOptions];
+  const activeFilterOptions =
+    openFilter === "sport" ? sportOptions : openFilter === "month" ? monthFilterOptions : ageFilterOptions;
 
   const filtered = matches
     .filter((match) => {
@@ -4497,6 +4518,7 @@ function MatchesScreen({
 
       const sportMatches = sportFilter === "Alle" || match.sport === sportFilter;
       const ageMatches = ageFilter === "Alle" || getAgeGroupDisplay(match.ageGroup) === ageFilter;
+      const monthMatches = monthFilter === "Alle" || getMatchMonthKey(match) === monthFilter;
       const search = searchText.trim().toLowerCase();
       const searchMatches =
         !search ||
@@ -4504,7 +4526,7 @@ function MatchesScreen({
           .join(" ")
           .toLowerCase()
           .includes(search);
-      return sportMatches && ageMatches && searchMatches;
+      return sportMatches && ageMatches && monthMatches && searchMatches;
     })
     .sort((a, b) => getMatchDateSortValue(a) - getMatchDateSortValue(b));
 
@@ -4523,6 +4545,12 @@ function MatchesScreen({
           </Text>
           <Ionicons name="chevron-down" size={18} color={colors.greenDark} />
         </Pressable>
+        <Pressable style={styles.filterPillButton} onPress={() => setOpenFilter("month")}>
+          <Text style={styles.filterPillText} numberOfLines={1}>
+            {monthFilter === "Alle" ? "Alle mnd" : formatMonthFilterLabel(monthFilter)}
+          </Text>
+          <Ionicons name="chevron-down" size={18} color={colors.greenDark} />
+        </Pressable>
         <Pressable style={styles.iconButton} onPress={onCreateMatch}>
           <Ionicons name="add" size={24} color="#FFFFFF" />
         </Pressable>
@@ -4532,10 +4560,15 @@ function MatchesScreen({
         <Pressable style={styles.filterSheetBackdrop} onPress={() => setOpenFilter(null)}>
           <View style={styles.filterSheet}>
             <Text style={styles.filterSheetTitle}>
-              {openFilter === "sport" ? "Velg idrett" : "Velg årskull"}
+              {openFilter === "sport" ? "Velg idrett" : openFilter === "month" ? "Velg mnd" : "Velg årskull"}
             </Text>
             {activeFilterOptions.map((option) => {
-              const isSelected = openFilter === "sport" ? option === sportFilter : option === ageFilter;
+              const isSelected =
+                openFilter === "sport"
+                  ? option === sportFilter
+                  : openFilter === "month"
+                    ? option === monthFilter
+                    : option === ageFilter;
               return (
                 <Pressable
                   key={option}
@@ -4543,6 +4576,8 @@ function MatchesScreen({
                   onPress={() => {
                     if (openFilter === "sport") {
                       onSportFilterChange(option as Sport | "Alle");
+                    } else if (openFilter === "month") {
+                      onMonthFilterChange(option);
                     } else {
                       onAgeFilterChange(option);
                     }
@@ -4553,9 +4588,13 @@ function MatchesScreen({
                     {option === "Alle"
                       ? openFilter === "sport"
                         ? "Alle idretter"
-                        : "Alle årskull"
+                        : openFilter === "month"
+                          ? "Alle mnd"
+                          : "Alle årskull"
                       : openFilter === "sport"
                         ? formatSport(option as Sport)
+                        : openFilter === "month"
+                          ? formatMonthFilterLabel(option)
                         : option}
                   </Text>
                   {isSelected ? <Ionicons name="checkmark" size={20} color={colors.greenDark} /> : null}
@@ -6331,6 +6370,25 @@ function getMatchDateSortValue(match: Match) {
   return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
 }
 
+function getMatchMonthKey(match: Match) {
+  const databaseDate = parseDateForDatabase(match.date);
+  return databaseDate ? databaseDate.slice(0, 7) : "";
+}
+
+function formatMonthFilterLabel(monthKey: string) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const date = new Date(year, month - 1, 1);
+
+  if (Number.isNaN(date.getTime())) {
+    return monthKey;
+  }
+
+  return date.toLocaleDateString("no-NO", {
+    month: "long",
+    year: "numeric"
+  });
+}
+
 function isMatchExpired(match: Match) {
   const timestamp = getMatchDateSortValue(match);
   return timestamp !== Number.MAX_SAFE_INTEGER && timestamp < Date.now();
@@ -7248,6 +7306,7 @@ function createStyles(colors: typeof lightColors) {
   toolbar: {
     alignItems: "center",
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
     padding: 16
   },
@@ -7279,6 +7338,7 @@ function createStyles(colors: typeof lightColors) {
     flexDirection: "row",
     height: 48,
     justifyContent: "space-between",
+    minWidth: 142,
     paddingHorizontal: 12
   },
   filterPillText: {
