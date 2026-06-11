@@ -4313,8 +4313,10 @@ function HomeScreen({
 
   return (
     <ScrollView
+      alwaysBounceVertical
       contentContainerStyle={styles.home}
       onScroll={(event) => onHeaderLogoChange(event.nativeEvent.contentOffset.y > 36)}
+      overScrollMode="always"
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -4567,9 +4569,11 @@ function MatchesScreen({
       </View>
 
       <FlatList
+        alwaysBounceVertical
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.list}
+        overScrollMode="always"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -4639,9 +4643,11 @@ function AgreedMatchesScreen({
 
   return (
     <FlatList
+      alwaysBounceVertical
       data={agreedMatches}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.list}
+      overScrollMode="always"
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -4839,7 +4845,9 @@ function MineScreen({
 
     return (
       <ScrollView
+        alwaysBounceVertical
         contentContainerStyle={styles.list}
+        overScrollMode="always"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -4884,7 +4892,9 @@ function MineScreen({
 
   return (
     <ScrollView
+      alwaysBounceVertical
       contentContainerStyle={styles.list}
+      overScrollMode="always"
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -5520,7 +5530,9 @@ function RequestDetailsModal({
           style={styles.modalKeyboard}
         >
           <ScrollView
+            alwaysBounceVertical
             contentContainerStyle={styles.details}
+            overScrollMode="always"
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
