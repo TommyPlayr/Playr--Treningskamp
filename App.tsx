@@ -30,8 +30,21 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Picker } from "@react-native-picker/picker";
+import * as Notifications from "expo-notifications";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
+
+const EXPO_PROJECT_ID = "4d8e55d1-1918-436c-8afd-bba8630461e4";
+
+if (Platform.OS !== "web") {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: false
+    })
+  });
+}
 
 const openSansFont = {
   regular: "OpenSans_400Regular",
@@ -88,6 +101,7 @@ type MatchStatus = "ledig" | "avtalt";
 type RequestStatus = "venter" | "godkjent" | "avslatt";
 type ThemeMode = "light" | "dark";
 type AppFeedbackCategory = "bug" | "forbedring" | "funksjon" | "annet";
+type PushNotificationType = "match_approved" | "match_cancelled" | "chat_message";
 
 type TeamProfile = {
   id: string;
@@ -140,6 +154,61 @@ type ChatMessage = {
   text: string;
   createdAt: string;
 };
+
+async function registerForPushNotifications(userId: string) {
+  if (!isSupabaseConfigured || !supabase || Platform.OS === "web") {
+    return;
+  }
+
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync("playr", {
+      name: "Playr",
+      importance: Notifications.AndroidImportance.MAX,
+      vibrationPattern: [0, 250, 250, 250],
+      lightColor: "#2E7D32"
+    });
+  }
+
+  const existingPermission = await Notifications.getPermissionsAsync();
+  let finalStatus = existingPermission.status;
+
+  if (existingPermission.status !== "granted") {
+    const requestedPermission = await Notifications.requestPermissionsAsync();
+    finalStatus = requestedPermission.status;
+  }
+
+  if (finalStatus !== "granted") {
+    return;
+  }
+
+  const token = await Notifications.getExpoPushTokenAsync({ projectId: EXPO_PROJECT_ID });
+
+  await supabase.from("push_tokens").upsert(
+    {
+      user_id: userId,
+      expo_push_token: token.data,
+      platform: Platform.OS,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "user_id,expo_push_token" }
+  );
+}
+
+function sendPushNotification(body: {
+  type: PushNotificationType;
+  requestId: string;
+  senderUserId?: string;
+  senderName?: string;
+  messagePreview?: string;
+}) {
+  if (!isSupabaseConfigured || !supabase) {
+    return;
+  }
+
+  supabase.functions.invoke("send-push-notification", { body }).catch((error) => {
+    console.warn("Push-varsel feilet.", error);
+  });
+}
 
 type PlaceSuggestion = {
   id: string;
@@ -854,6 +923,16 @@ function PlayrApp({
       supabase.auth.stopAutoRefresh();
     };
   }, []);
+
+  useEffect(() => {
+    if (!authUserId) {
+      return;
+    }
+
+    registerForPushNotifications(authUserId).catch((error) => {
+      console.warn("Kunne ikke registrere push-varsler.", error);
+    });
+  }, [authUserId]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -1959,6 +2038,8 @@ function PlayrApp({
           });
         }
 
+        sendPushNotification({ type: "match_approved", requestId: request.id });
+
         await loadAppData();
       } catch (error) {
         Alert.alert("Kampen ble ikke godkjent", getReadableErrorMessage(error));
@@ -2091,6 +2172,8 @@ function PlayrApp({
             }, delay);
           });
         }
+
+        sendPushNotification({ type: "match_cancelled", requestId: approvedRequest.id });
 
         await loadAppData();
       }
@@ -2623,6 +2706,14 @@ function PlayrApp({
       if (error) {
         throw error;
       }
+
+      sendPushNotification({
+        type: "chat_message",
+        requestId: requestIdForChat,
+        senderUserId: authUserId,
+        senderName: currentProfile.contactName,
+        messagePreview: text
+      });
 
       await loadAppData();
     } catch (error) {
