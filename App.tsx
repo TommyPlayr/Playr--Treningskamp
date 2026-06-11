@@ -7204,18 +7204,18 @@ function createStyles(colors: typeof lightColors) {
     fontSize: 24
   },
   heroTitle: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: "600",
-    lineHeight: 29,
-    marginBottom: 14,
-    textAlign: "center"
-  },
-  heroText: {
     color: colors.greenDark,
     fontSize: 17,
     fontWeight: "600",
     lineHeight: 25,
+    marginBottom: 14,
+    textAlign: "center"
+  },
+  heroText: {
+    color: colors.text,
+    fontSize: 22,
+    fontWeight: "600",
+    lineHeight: 29,
     marginTop: 0,
     marginBottom: 6,
     textAlign: "center"
