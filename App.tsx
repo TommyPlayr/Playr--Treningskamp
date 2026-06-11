@@ -795,6 +795,7 @@ function PlayrApp({
   const [seenChatByRequest, setSeenChatByRequest] = useState<Record<string, number>>({});
   const [notificationSeenProfileId, setNotificationSeenProfileId] = useState<string | null>(fallbackProfile.id);
   const [isRefreshingData, setIsRefreshingData] = useState(false);
+  const [currentTimeTick, setCurrentTimeTick] = useState(Date.now());
 
   const selectedMatch = matches.find((match) => match.id === selectedMatchId) ?? null;
   const selectedRequest = requests.find((request) => request.id === selectedRequestId) ?? null;
@@ -838,6 +839,14 @@ function PlayrApp({
       subscription.remove();
       supabase.auth.stopAutoRefresh();
     };
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTimeTick(Date.now());
+    }, 30000);
+
+    return () => clearInterval(timer);
   }, []);
 
   const getNotificationCountsForProfile = (profileId: string) => {
@@ -951,12 +960,13 @@ function PlayrApp({
         const target = `${match.sport}:${getAgeGroupDisplay(match.ageGroup)}`;
         return (
           match.status === "ledig" &&
+          !isMatchExpired(match) &&
           !ownedTeamIds.has(match.hostTeamId) &&
           target === activeProfileTarget
         );
       })
       .map((match) => match.id);
-  }, [currentProfile.ageGroup, currentProfile.sport, matches, teamProfiles]);
+  }, [currentProfile.ageGroup, currentProfile.sport, currentTimeTick, matches, teamProfiles]);
   const seenMatchingMatchIdSet = useMemo(
     () => new Set(seenMatchingMatchIds),
     [seenMatchingMatchIds]
@@ -4258,6 +4268,7 @@ function HomeScreen({
   const relevantMatches = matches.filter(
     (match) =>
       match.status === "ledig" &&
+      !isMatchExpired(match) &&
       match.sport === profile.sport &&
       getAgeGroupDisplay(match.ageGroup) === getAgeGroupDisplay(profile.ageGroup) &&
       match.hostTeamId !== profile.id
@@ -4476,6 +4487,10 @@ function MatchesScreen({
         return false;
       }
 
+      if (isMatchExpired(match)) {
+        return false;
+      }
+
       const sportMatches = sportFilter === "Alle" || match.sport === sportFilter;
       const ageMatches = ageFilter === "Alle" || getAgeGroupDisplay(match.ageGroup) === ageFilter;
       const search = searchText.trim().toLowerCase();
@@ -4610,6 +4625,10 @@ function AgreedMatchesScreen({
 }) {
   const agreedMatches = matches.filter((match) => {
     if (match.status !== "avtalt") {
+      return false;
+    }
+
+    if (isMatchExpired(match)) {
       return false;
     }
 
@@ -4792,11 +4811,11 @@ function MineScreen({
   const agreedMyMatches = agreedMatchesForAllProfiles.length;
   const completedMyMatches = completedMatchesForAllProfiles.length;
   const activeHostedMatches = ownedHostedMatches
-    .filter((match) => match.status !== "avtalt")
+    .filter((match) => match.status !== "avtalt" && !isMatchExpired(match))
     .sort((a, b) => getMatchDateSortValue(a) - getMatchDateSortValue(b));
   const activeMyRequests = ownedRequests.filter((request) => {
     const match = matches.find((candidate) => candidate.id === request.matchId);
-    return request.status === "venter" && match?.status !== "avtalt";
+    return request.status === "venter" && Boolean(match) && match?.status !== "avtalt" && !isMatchExpired(match);
   });
   const sortedMyRequests = [...activeMyRequests].sort(
     (a, b) =>
@@ -6164,6 +6183,11 @@ function getMatchDateSortValue(match: Match) {
 
   const timestamp = new Date(`${databaseDate}T${databaseTime}`).getTime();
   return Number.isNaN(timestamp) ? Number.MAX_SAFE_INTEGER : timestamp;
+}
+
+function isMatchExpired(match: Match) {
+  const timestamp = getMatchDateSortValue(match);
+  return timestamp !== Number.MAX_SAFE_INTEGER && timestamp < Date.now();
 }
 
 function getRequestMatchDateSortValue(request: MatchRequest, matches: Match[]) {
