@@ -1422,7 +1422,7 @@ function PlayrApp({
   useEffect(() => {
     let ignore = false;
 
-    loadAppData({ showBlockingLoader: true, shouldIgnore: () => ignore });
+    loadAppData({ shouldIgnore: () => ignore });
 
     return () => {
       ignore = true;
@@ -2792,17 +2792,6 @@ function PlayrApp({
           setHasTeamProfile(true);
         }}
       />
-    );
-  }
-
-  if (isSupabaseConfigured && hasTeamProfile && !appDataReady) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingScreen}>
-          <ActivityIndicator color={colors.green} size="large" />
-          <Text style={styles.loadingText}>Henter kamper og forespørsler...</Text>
-        </View>
-      </SafeAreaView>
     );
   }
 
