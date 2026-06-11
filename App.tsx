@@ -141,6 +141,14 @@ type ChatMessage = {
   createdAt: string;
 };
 
+type PlaceSuggestion = {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  description: string;
+};
+
 type DatabaseMatchRow = {
   id: string;
   sport: Sport;
@@ -5161,7 +5169,17 @@ function CreateMatchModal({
             ) : null}
             <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026 eller 15-06-26" />
             <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00 eller 1800" />
-            <Input label="Bane/sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Marienlyst stadion" />
+            <PlaceAutocompleteInput
+              value={form.place}
+              onChangeText={(place) => onChange({ ...form, place })}
+              onSelect={(suggestion) =>
+                onChange({
+                  ...form,
+                  place: suggestion.name || suggestion.description,
+                  city: suggestion.city || suggestion.address || form.city
+                })
+              }
+            />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
             <Input
               label="Kommentar"
@@ -5237,7 +5255,17 @@ function EditMatchModal({
             <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
             <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026 eller 15-06-26" />
             <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00 eller 1800" />
-            <Input label="Bane/sted" value={form.place} onChangeText={(place) => onChange({ ...form, place })} placeholder="Eks: Marienlyst stadion" />
+            <PlaceAutocompleteInput
+              value={form.place}
+              onChangeText={(place) => onChange({ ...form, place })}
+              onSelect={(suggestion) =>
+                onChange({
+                  ...form,
+                  place: suggestion.name || suggestion.description,
+                  city: suggestion.city || suggestion.address || form.city
+                })
+              }
+            />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
             <Input
               label="Kommentar"
@@ -5367,7 +5395,7 @@ function MatchDetailsModal({
           {getVisibleLevel(match.level) ? <DetailRow label="Nivå" value={match.level} /> : null}
           <DetailRow label="Dato" value={`${match.date} ${match.time}`} />
           <DetailRow label="Bane/sted" value={match.place} />
-          <Pressable style={styles.mapButton} onPress={() => openMapForPlace(match.place)}>
+          <Pressable style={styles.mapButton} onPress={() => openMapForPlace(match.place, match.city)}>
             <Ionicons name="map-outline" size={18} color={colors.greenDark} />
             <Text style={styles.mapButtonText}>Åpne i kart</Text>
           </Pressable>
@@ -5729,6 +5757,117 @@ function Input({
   );
 }
 
+function PlaceAutocompleteInput({
+  value,
+  onChangeText,
+  onSelect
+}: {
+  value: string;
+  onChangeText: (text: string) => void;
+  onSelect: (suggestion: PlaceSuggestion) => void;
+}) {
+  const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [selectedValue, setSelectedValue] = useState("");
+
+  useEffect(() => {
+    const query = value.trim();
+
+    if (query.length < 3 || query === selectedValue) {
+      setSuggestions([]);
+      setSearchError(null);
+      setIsSearching(false);
+      return;
+    }
+
+    if (!supabase) {
+      return;
+    }
+
+    let ignore = false;
+    setIsSearching(true);
+    setSearchError(null);
+
+    const timer = setTimeout(async () => {
+      const { data, error } = await supabase.functions.invoke("place-autocomplete", {
+        body: { query }
+      });
+
+      if (ignore) {
+        return;
+      }
+
+      setIsSearching(false);
+
+      if (error) {
+        setSuggestions([]);
+        setSearchError("Stedssøk er ikke tilgjengelig akkurat nå.");
+        return;
+      }
+
+      const nextSuggestions = Array.isArray(data?.suggestions)
+        ? (data.suggestions as PlaceSuggestion[])
+        : [];
+      setSuggestions(nextSuggestions);
+    }, 350);
+
+    return () => {
+      ignore = true;
+      clearTimeout(timer);
+    };
+  }, [selectedValue, value]);
+
+  const selectSuggestion = (suggestion: PlaceSuggestion) => {
+    const nextValue = suggestion.name || suggestion.description;
+    setSelectedValue(nextValue);
+    setSuggestions([]);
+    setSearchError(null);
+    onSelect(suggestion);
+  };
+
+  return (
+    <View>
+      <Text style={styles.inputLabel}>Bane/sted</Text>
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={(text) => {
+          setSelectedValue("");
+          onChangeText(text);
+        }}
+        placeholder="Søk bane, sted eller adresse"
+        placeholderTextColor={colors.muted}
+        autoCapitalize="words"
+        autoCorrect={false}
+      />
+      {isSearching ? <Text style={styles.placeSearchStatus}>Søker etter steder...</Text> : null}
+      {suggestions.length > 0 ? (
+        <View style={styles.placeSuggestionList}>
+          {suggestions.map((suggestion) => (
+            <Pressable
+              key={suggestion.id}
+              style={styles.placeSuggestionItem}
+              onPress={() => selectSuggestion(suggestion)}
+            >
+              <Ionicons name="location-outline" size={17} color={colors.greenDark} />
+              <View style={styles.placeSuggestionTextBlock}>
+                <Text style={styles.placeSuggestionTitle} numberOfLines={1}>
+                  {suggestion.name || suggestion.description}
+                </Text>
+                <Text style={styles.placeSuggestionAddress} numberOfLines={2}>
+                  {suggestion.address || suggestion.city || suggestion.description}
+                </Text>
+              </View>
+            </Pressable>
+          ))}
+        </View>
+      ) : null}
+      {searchError ? <Text style={styles.placeSearchStatus}>{searchError}</Text> : null}
+    </View>
+  );
+}
+
 function LevelInput({
   value,
   onChangeText
@@ -5862,8 +6001,9 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function openMapForPlace(place: string) {
-  const query = encodeURIComponent(place.trim());
+function openMapForPlace(place: string, city?: string) {
+  const queryText = [place, city && city !== "Ikke satt" ? city : ""].filter(Boolean).join(", ");
+  const query = encodeURIComponent(queryText.trim());
   if (!query) {
     return;
   }
@@ -7747,6 +7887,44 @@ function createStyles(colors: typeof lightColors) {
     fontSize: 16,
     minHeight: 50,
     paddingHorizontal: 14
+  },
+  placeSearchStatus: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 7
+  },
+  placeSuggestionList: {
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 8,
+    overflow: "hidden"
+  },
+  placeSuggestionItem: {
+    alignItems: "flex-start",
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 12
+  },
+  placeSuggestionTextBlock: {
+    flex: 1
+  },
+  placeSuggestionTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  placeSuggestionAddress: {
+    color: colors.muted,
+    fontSize: 12,
+    fontWeight: "700",
+    lineHeight: 17,
+    marginTop: 2
   },
   levelInputRow: {
     alignItems: "center",
