@@ -408,12 +408,16 @@ const isPasswordResetUrl = () => {
 };
 
 const shouldStartSignedOutForWebReview = () => {
+  if (Platform.OS !== "web") {
+    return false;
+  }
+
   if (typeof window === "undefined" || !window.location) {
     return false;
   }
 
   const searchParams = new URLSearchParams(window.location.search);
-  return Platform.OS === "web" || searchParams.get("logout") === "1" || searchParams.get("start") === "login";
+  return searchParams.get("logout") === "1" || searchParams.get("start") === "login";
 };
 
 const getPasswordResetCodeFromUrl = () => {
