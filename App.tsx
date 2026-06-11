@@ -17,6 +17,7 @@ import {
   StyleSheet,
   Text as RNText,
   TextInput as RNTextInput,
+  TouchableOpacity,
   type TextInputProps,
   type TextProps,
   View
@@ -4946,14 +4947,14 @@ function MineScreen({
       </View>
 
       <View style={styles.mineStats}>
-        <Pressable style={styles.mineStatItem} onPress={() => setStatsView("agreed")}>
+        <TouchableOpacity activeOpacity={0.82} style={styles.mineStatItem} onPress={() => setStatsView("agreed")}>
           <Text style={styles.mineStatNumber}>{agreedMyMatches}</Text>
           <Text style={styles.mineStatLabel}>Antall avtalte kamper</Text>
-        </Pressable>
-        <Pressable style={styles.mineStatItem} onPress={() => setStatsView("completed")}>
+        </TouchableOpacity>
+        <TouchableOpacity activeOpacity={0.82} style={styles.mineStatItem} onPress={() => setStatsView("completed")}>
           <Text style={styles.mineStatNumber}>{completedMyMatches}</Text>
           <Text style={styles.mineStatLabel}>Gjennomførte kamper</Text>
-        </Pressable>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.requestTabs}>
