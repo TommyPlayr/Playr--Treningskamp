@@ -3,7 +3,9 @@ import { Component, useCallback, useEffect, useMemo, useRef, useState, type Reac
 import {
   Alert,
   ActivityIndicator,
+  Animated,
   AppState,
+  Easing,
   FlatList,
   KeyboardAvoidingView,
   Linking,
@@ -804,14 +806,7 @@ export default function App() {
   }
 
   if (!fontsLoaded) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingScreen}>
-          <ActivityIndicator color={colors.green} size="large" />
-          <Text style={styles.loadingText}>Starter Playr...</Text>
-        </View>
-      </SafeAreaView>
-    );
+    return <PlayrLoadingScreen />;
   }
 
   return (
@@ -2854,14 +2849,7 @@ function PlayrApp({
   }
 
   if (isSupabaseConfigured && !authReady) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingScreen}>
-          <ActivityIndicator color={colors.green} size="large" />
-          <Text style={styles.loadingText}>Starter Playr...</Text>
-        </View>
-      </SafeAreaView>
-    );
+    return <PlayrLoadingScreen />;
   }
 
   if (passwordResetVisible) {
@@ -2873,14 +2861,7 @@ function PlayrApp({
   }
 
   if (isSupabaseConfigured && !profileReady) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.loadingScreen}>
-          <ActivityIndicator color={colors.green} size="large" />
-          <Text style={styles.loadingText}>Henter lagprofil...</Text>
-        </View>
-      </SafeAreaView>
-    );
+    return <PlayrLoadingScreen />;
   }
 
   if (isSupabaseConfigured && authUserId && userEmail && !hasTeamProfile) {
@@ -4323,6 +4304,44 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
       <View style={[styles.patternMatchLine, styles.patternMatchLineOne]} />
       <View style={[styles.patternMatchLine, styles.patternMatchLineTwo]} />
     </View>
+  );
+}
+
+function PlayrLoadingScreen() {
+  const rotation = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.timing(rotation, {
+        toValue: 1,
+        duration: 1500,
+        easing: Easing.linear,
+        useNativeDriver: true
+      })
+    );
+
+    animation.start();
+
+    return () => animation.stop();
+  }, [rotation]);
+
+  const rotate = rotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"]
+  });
+
+  return (
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.loadingScreen}>
+        <Animated.View style={[styles.loadingLogoIcon, { transform: [{ rotate }] }]}>
+          <View style={[styles.logoDot, styles.logoDotLeft]} />
+          <View style={[styles.logoDot, styles.logoDotRight]} />
+          <View style={[styles.logoArc, styles.logoArcTop]} />
+          <View style={[styles.logoArc, styles.logoArcBottom]} />
+        </Animated.View>
+        <Text style={styles.loadingLogoText}>Playr</Text>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -6659,8 +6678,19 @@ function createStyles(colors: typeof lightColors) {
     alignItems: "center",
     backgroundColor: colors.background,
     flex: 1,
-    gap: 14,
+    gap: 12,
     justifyContent: "center"
+  },
+  loadingLogoIcon: {
+    height: 44,
+    position: "relative",
+    width: 86
+  },
+  loadingLogoText: {
+    color: colors.black,
+    fontSize: 42,
+    fontWeight: "700",
+    textAlign: "center"
   },
   loadingText: {
     color: colors.greenDark,
