@@ -760,6 +760,7 @@ class StartupErrorBoundary extends Component<{ children: ReactNode }, StartupErr
 export default function App() {
   const [startupError, setStartupError] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(readThemeMode);
+  const [minimumLoadingDone, setMinimumLoadingDone] = useState(false);
   const [fontsLoaded] = useFonts({
     OpenSans_400Regular,
     OpenSans_600SemiBold
@@ -774,6 +775,14 @@ export default function App() {
       saveThemeMode(next);
       return next;
     });
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setMinimumLoadingDone(true);
+    }, 1400);
+
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -805,7 +814,7 @@ export default function App() {
     );
   }
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded || !minimumLoadingDone) {
     return <PlayrLoadingScreen />;
   }
 
@@ -4314,7 +4323,7 @@ function PlayrLoadingScreen() {
     const animation = Animated.loop(
       Animated.timing(rotation, {
         toValue: 1,
-        duration: 1500,
+        duration: 1400,
         easing: Easing.linear,
         useNativeDriver: true
       })
