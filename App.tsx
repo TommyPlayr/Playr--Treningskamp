@@ -4635,10 +4635,12 @@ function PlayrLoadingScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.loadingScreen}>
         <Animated.View style={[styles.loadingLogoIcon, { transform: [{ rotate }] }]}>
-          <View style={[styles.logoDot, styles.logoDotLeft]} />
-          <View style={[styles.logoDot, styles.logoDotRight]} />
-          <View style={[styles.logoArc, styles.logoArcTop]} />
-          <View style={[styles.logoArc, styles.logoArcBottom]} />
+          <View style={[styles.loadingLogoDot, styles.loadingLogoDotLeft]} />
+          <View style={[styles.loadingLogoDot, styles.loadingLogoDotRight]} />
+          <View style={[styles.loadingLogoArc, styles.loadingLogoArcTop]} />
+          <View style={[styles.loadingLogoArc, styles.loadingLogoArcBottom]} />
+          <View style={[styles.loadingLogoArrow, styles.loadingLogoArrowTop]} />
+          <View style={[styles.loadingLogoArrow, styles.loadingLogoArrowBottom]} />
         </Animated.View>
         <Text style={styles.loadingLogoText}>Playr</Text>
       </View>
@@ -7204,9 +7206,62 @@ function createStyles(colors: typeof lightColors) {
     justifyContent: "center"
   },
   loadingLogoIcon: {
-    height: 44,
+    height: 64,
     position: "relative",
-    width: 86
+    width: 128
+  },
+  loadingLogoDot: {
+    backgroundColor: colors.black,
+    borderRadius: 999,
+    height: 22,
+    position: "absolute",
+    top: 21,
+    width: 22,
+    zIndex: 3
+  },
+  loadingLogoDotLeft: {
+    left: 16
+  },
+  loadingLogoDotRight: {
+    right: 16
+  },
+  loadingLogoArc: {
+    borderColor: colors.green,
+    borderRadius: 999,
+    borderWidth: 8,
+    height: 54,
+    left: 30,
+    position: "absolute",
+    width: 68
+  },
+  loadingLogoArcTop: {
+    borderBottomColor: "transparent",
+    top: 2
+  },
+  loadingLogoArcBottom: {
+    borderTopColor: "transparent",
+    bottom: 2
+  },
+  loadingLogoArrow: {
+    borderColor: colors.green,
+    borderLeftColor: "transparent",
+    borderTopColor: "transparent",
+    borderRadius: 2,
+    borderWidth: 5,
+    height: 20,
+    position: "absolute",
+    width: 20,
+    zIndex: 4
+  },
+  loadingLogoArrowTop: {
+    right: 29,
+    top: 12,
+    transform: [{ rotate: "-26deg" }]
+  },
+  loadingLogoArrowBottom: {
+    bottom: 12,
+    left: 29,
+    transform: [{ rotate: "154deg" }]
   },
   loadingLogoText: {
     color: colors.black,
