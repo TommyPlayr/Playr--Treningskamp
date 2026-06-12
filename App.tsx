@@ -2061,7 +2061,11 @@ function PlayrApp({
         supabase.functions
           .invoke("match-confirmation-sms", { body: { requestId: data.requestId } })
           .catch(() => undefined);
-        sendPushNotification({ type: "match_approved", requestId: data.requestId });
+        sendPushNotification({
+          type: "match_approved",
+          requestId: data.requestId,
+          senderUserId: authUserId ?? undefined
+        });
       }
 
       await loadAppData();
@@ -2274,7 +2278,11 @@ function PlayrApp({
           });
         }
 
-        sendPushNotification({ type: "match_approved", requestId: request.id });
+        sendPushNotification({
+          type: "match_approved",
+          requestId: request.id,
+          senderUserId: authUserId ?? undefined
+        });
 
         await loadAppData();
       } catch (error) {
@@ -2409,7 +2417,11 @@ function PlayrApp({
           });
         }
 
-        sendPushNotification({ type: "match_cancelled", requestId: approvedRequest.id });
+        sendPushNotification({
+          type: "match_cancelled",
+          requestId: approvedRequest.id,
+          senderUserId: authUserId ?? undefined
+        });
 
         await loadAppData();
       }
