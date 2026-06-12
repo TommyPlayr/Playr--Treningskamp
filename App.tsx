@@ -4378,12 +4378,12 @@ function ProfileEditModal({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
         >
-          <View style={styles.modalHeader}>
+          <ModalHeaderView>
             <Text style={styles.modalTitle}>Rediger lagprofil</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.text} />
             </Pressable>
-          </View>
+          </ModalHeaderView>
 
           <ScrollView contentContainerStyle={styles.details}>
             <Input
@@ -4505,12 +4505,12 @@ function AppFeedbackModal({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
         >
-          <View style={styles.modalHeader}>
+          <ModalHeaderView>
             <Text style={styles.modalTitle}>Gi oss i Playr tilbakemelding</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.text} />
             </Pressable>
-          </View>
+          </ModalHeaderView>
 
           <ScrollView
             style={styles.modalScroll}
@@ -5606,12 +5606,12 @@ function CreateMatchModal({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
         >
-          <View style={styles.modalHeader}>
+          <ModalHeaderView>
             <Text style={styles.modalTitle}>Legg ut kamp</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.text} />
             </Pressable>
-          </View>
+          </ModalHeaderView>
 
           <ScrollView
             style={styles.modalScroll}
@@ -5694,12 +5694,12 @@ function EditMatchModal({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
         >
-          <View style={styles.modalHeader}>
+          <ModalHeaderView>
             <Text style={styles.modalTitle}>Rediger kamp</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.text} />
             </Pressable>
-          </View>
+          </ModalHeaderView>
 
           <ScrollView
             style={styles.modalScroll}
@@ -5815,12 +5815,12 @@ function MatchDetailsModal({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
         >
-          <View style={styles.modalHeader}>
+          <ModalHeaderView>
             <Text style={styles.modalTitle}>Kamp</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.text} />
             </Pressable>
-          </View>
+          </ModalHeaderView>
 
           <ScrollView
             style={styles.modalScroll}
@@ -5979,12 +5979,12 @@ function InviteCoachModal({
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
         >
-          <View style={styles.modalHeader}>
+          <ModalHeaderView>
             <Text style={styles.modalTitle}>Inviter trener</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
               <Ionicons name="close" size={24} color={colors.text} />
             </Pressable>
-          </View>
+          </ModalHeaderView>
 
           <ScrollView
             style={styles.modalScroll}
@@ -6071,12 +6071,12 @@ function ExternalInvitationModal({
   return (
     <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
-        <View style={styles.modalHeader}>
+        <ModalHeaderView>
           <Text style={styles.modalTitle}>Kampinvitasjon</Text>
           <Pressable onPress={onClose} style={styles.closeButton}>
             <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
-        </View>
+        </ModalHeaderView>
 
         <ScrollView style={styles.modalScroll} contentContainerStyle={styles.details}>
           {isLoading ? (
@@ -6195,12 +6195,12 @@ function RequestDetailsModal({
 
   return (
       <SafeAreaView style={[styles.modalSafe, styles.requestDetailsOverlay]}>
-        <View style={styles.chatModalHeader}>
+        <ChatModalHeaderView>
           <Text style={styles.modalTitle}>Forespørsel</Text>
           <Pressable onPress={onClose} style={styles.chatCloseButton} hitSlop={12}>
             <Ionicons name="close" size={24} color={colors.text} />
           </Pressable>
-        </View>
+        </ChatModalHeaderView>
 
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -6340,6 +6340,30 @@ function BottomTabs({
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+function getModalHeaderTopPadding(topInset: number) {
+  return Math.max(topInset + 12, Platform.OS === "android" ? 44 : 28);
+}
+
+function ModalHeaderView({ children, style }: { children: ReactNode; style?: any }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.modalHeader, { paddingTop: getModalHeaderTopPadding(insets.top) }, style]}>
+      {children}
+    </View>
+  );
+}
+
+function ChatModalHeaderView({ children, style }: { children: ReactNode; style?: any }) {
+  const insets = useSafeAreaInsets();
+
+  return (
+    <View style={[styles.chatModalHeader, { paddingTop: getModalHeaderTopPadding(insets.top) }, style]}>
+      {children}
     </View>
   );
 }
