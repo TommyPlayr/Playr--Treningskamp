@@ -157,6 +157,14 @@ type ChatMessage = {
   createdAt: string;
 };
 
+type ExternalMatchInvitation = {
+  token: string;
+  status: string;
+  expiresAt: string;
+  invitedTeamName?: string | null;
+  match: Match;
+};
+
 async function registerForPushNotifications(userId: string) {
   if (!isSupabaseConfigured || !supabase || Platform.OS === "web") {
     return;
@@ -869,6 +877,17 @@ function PlayrApp({
   const [feedbackStatus, setFeedbackStatus] = useState<string | null>(null);
   const [isSendingFeedback, setIsSendingFeedback] = useState(false);
   const [editForm, setEditForm] = useState(createEmptyForm(fallbackProfile));
+  const [inviteMatch, setInviteMatch] = useState<Match | null>(null);
+  const [invitePhone, setInvitePhone] = useState("");
+  const [inviteTeamName, setInviteTeamName] = useState("");
+  const [inviteFeedback, setInviteFeedback] = useState<string | null>(null);
+  const [isSendingInvite, setIsSendingInvite] = useState(false);
+  const [pendingInviteToken, setPendingInviteToken] = useState(getInviteTokenFromCurrentLocation);
+  const [externalInvitation, setExternalInvitation] = useState<ExternalMatchInvitation | null>(null);
+  const [externalInvitationVisible, setExternalInvitationVisible] = useState(false);
+  const [externalInvitationFeedback, setExternalInvitationFeedback] = useState<string | null>(null);
+  const [isLoadingExternalInvitation, setIsLoadingExternalInvitation] = useState(false);
+  const [isAcceptingExternalInvitation, setIsAcceptingExternalInvitation] = useState(false);
   const [matchesSportFilter, setMatchesSportFilter] = useState<Sport | "Alle">("Alle");
   const [matchesAgeFilter, setMatchesAgeFilter] = useState("Alle");
   const [matchesMonthFilter, setMatchesMonthFilter] = useState("Alle");
@@ -926,6 +945,26 @@ function PlayrApp({
       subscription.remove();
       supabase.auth.stopAutoRefresh();
     };
+  }, []);
+
+  useEffect(() => {
+    Linking.getInitialURL()
+      .then((url) => {
+        const token = getInviteTokenFromUrl(url);
+        if (token) {
+          setPendingInviteToken(token);
+        }
+      })
+      .catch(() => undefined);
+
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      const token = getInviteTokenFromUrl(url);
+      if (token) {
+        setPendingInviteToken(token);
+      }
+    });
+
+    return () => subscription.remove();
   }, []);
 
   useEffect(() => {
@@ -1182,6 +1221,59 @@ function PlayrApp({
       setIsRefreshingData(false);
     }
   }, [isRefreshingData, loadAppData]);
+
+  useEffect(() => {
+    if (!pendingInviteToken || !isSupabaseConfigured || !supabase || !authUserId || !profileReady || !hasTeamProfile) {
+      return;
+    }
+
+    let ignore = false;
+    setIsLoadingExternalInvitation(true);
+    setExternalInvitationFeedback(null);
+
+    supabase.functions
+      .invoke("match-invitation", {
+        body: { action: "lookup", token: pendingInviteToken }
+      })
+      .then(({ data, error }) => {
+        if (ignore) {
+          return;
+        }
+
+        if (error || !data?.invitation?.match) {
+          const message = data && typeof data.error === "string" ? data.error : "Invitasjonen kunne ikke hentes.";
+          setExternalInvitationFeedback(getReadableErrorMessage(error ?? new Error(message)));
+          setExternalInvitation(null);
+          setExternalInvitationVisible(true);
+          return;
+        }
+
+        setExternalInvitation({
+          token: data.invitation.token,
+          status: data.invitation.status,
+          expiresAt: data.invitation.expiresAt,
+          invitedTeamName: data.invitation.invitedTeamName,
+          match: mapInvitationMatch(data.invitation.match)
+        });
+        setExternalInvitationVisible(true);
+      })
+      .catch((error) => {
+        if (!ignore) {
+          setExternalInvitationFeedback(getReadableErrorMessage(error, "Invitasjonen kunne ikke hentes."));
+          setExternalInvitation(null);
+          setExternalInvitationVisible(true);
+        }
+      })
+      .finally(() => {
+        if (!ignore) {
+          setIsLoadingExternalInvitation(false);
+        }
+      });
+
+    return () => {
+      ignore = true;
+    };
+  }, [pendingInviteToken, authUserId, profileReady, hasTeamProfile]);
 
   useEffect(() => {
     if (!isSupabaseConfigured || !supabase || !authUserId) {
@@ -1870,6 +1962,146 @@ function PlayrApp({
     }
   };
 
+  const openInviteMatch = (match: Match) => {
+    if (match.status !== "ledig") {
+      Alert.alert("Kampen er ikke ledig", "Du kan bare invitere lag til kamper som fortsatt er ledige.");
+      return;
+    }
+
+    if (!myTeamIds.has(match.hostTeamId)) {
+      Alert.alert("Kan ikke invitere", "Du kan bare invitere lag til kamper du selv har lagt ut.");
+      return;
+    }
+
+    setInviteMatch(match);
+    setInvitePhone("");
+    setInviteTeamName("");
+    setInviteFeedback(null);
+  };
+
+  const sendMatchInvitation = async () => {
+    if (!inviteMatch || isSendingInvite) {
+      return;
+    }
+
+    const normalizedPhone = normalizePhoneForOtp(invitePhone);
+
+    if (!normalizedPhone) {
+      setInviteFeedback("Skriv inn et gyldig telefonnummer.");
+      return;
+    }
+
+    setIsSendingInvite(true);
+    setInviteFeedback(null);
+
+    try {
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error("Supabase er ikke konfigurert.");
+      }
+
+      const { data, error } = await supabase.functions.invoke("match-invitation", {
+        body: {
+          action: "send",
+          matchId: inviteMatch.id,
+          phone: normalizedPhone,
+          invitedTeamName: inviteTeamName
+        }
+      });
+
+      if (error || (data && data.ok === false)) {
+        const message = data && typeof data.error === "string" ? data.error : "Invitasjonen ble ikke sendt.";
+        throw error ?? new Error(message);
+      }
+
+      setInviteFeedback("Invitasjonen er sendt på SMS.");
+      setInvitePhone("");
+      setInviteTeamName("");
+    } catch (error) {
+      setInviteFeedback(getReadableErrorMessage(error, "Invitasjonen ble ikke sendt."));
+    } finally {
+      setIsSendingInvite(false);
+    }
+  };
+
+  const closeExternalInvitation = () => {
+    setExternalInvitationVisible(false);
+    setPendingInviteToken("");
+    setExternalInvitation(null);
+    setExternalInvitationFeedback(null);
+  };
+
+  const acceptExternalInvitation = async () => {
+    if (!externalInvitation || isAcceptingExternalInvitation) {
+      return;
+    }
+
+    setIsAcceptingExternalInvitation(true);
+    setExternalInvitationFeedback(null);
+
+    try {
+      if (!isSupabaseConfigured || !supabase) {
+        throw new Error("Supabase er ikke konfigurert.");
+      }
+
+      const { data, error } = await supabase.functions.invoke("match-invitation", {
+        body: {
+          action: "accept",
+          token: externalInvitation.token,
+          fromTeamId: currentProfile.id,
+          message: `${formatTeamName(currentProfile.club, currentProfile.team)} godkjente invitasjonen i Playr.`
+        }
+      });
+
+      if (error || (data && data.ok === false)) {
+        const message = data && typeof data.error === "string" ? data.error : "Invitasjonen ble ikke godkjent.";
+        throw error ?? new Error(message);
+      }
+
+      if (data?.requestId) {
+        supabase.functions
+          .invoke("match-confirmation-sms", { body: { requestId: data.requestId } })
+          .catch(() => undefined);
+        sendPushNotification({ type: "match_approved", requestId: data.requestId });
+      }
+
+      await loadAppData();
+      setSelectedMatchId(data?.matchId ?? externalInvitation.match.id);
+      closeExternalInvitation();
+    } catch (error) {
+      setExternalInvitationFeedback(getReadableErrorMessage(error, "Invitasjonen ble ikke godkjent."));
+    } finally {
+      setIsAcceptingExternalInvitation(false);
+    }
+  };
+
+  const declineExternalInvitation = async () => {
+    if (!externalInvitation || isAcceptingExternalInvitation) {
+      return;
+    }
+
+    setIsAcceptingExternalInvitation(true);
+    setExternalInvitationFeedback(null);
+
+    try {
+      if (isSupabaseConfigured && supabase) {
+        const { data, error } = await supabase.functions.invoke("match-invitation", {
+          body: { action: "decline", token: externalInvitation.token }
+        });
+
+        if (error || (data && data.ok === false)) {
+          const message = data && typeof data.error === "string" ? data.error : "Invitasjonen ble ikke avslått.";
+          throw error ?? new Error(message);
+        }
+      }
+
+      closeExternalInvitation();
+    } catch (error) {
+      setExternalInvitationFeedback(getReadableErrorMessage(error, "Invitasjonen ble ikke avslått."));
+    } finally {
+      setIsAcceptingExternalInvitation(false);
+    }
+  };
+
   const sendRequest = async (match: Match) => {
     if (isSendingRequest) {
       return;
@@ -2303,7 +2535,7 @@ function PlayrApp({
 
   const deleteTeamProfile = async (profile: TeamProfile) => {
     if (teamProfiles.length <= 1) {
-      throw new Error("Du mÃ¥ ha minst ett lag i appen.");
+      throw new Error("Du må ha minst ett lag i appen.");
     }
 
     const nextProfiles = teamProfiles.filter((teamProfile) => teamProfile.id !== profile.id);
@@ -2419,7 +2651,7 @@ function PlayrApp({
     try {
       if (isSupabaseConfigured && supabase) {
         if (!authUserId) {
-          throw new Error("Du mÃ¥ vÃ¦re innlogget for Ã¥ slette kontoen.");
+          throw new Error("Du må være innlogget for å slette kontoen.");
         }
 
         const { error } = await supabase.rpc("delete_own_account");
@@ -2975,12 +3207,37 @@ function PlayrApp({
         onRefresh={refreshAppData}
         onClose={() => setSelectedMatchId(null)}
         onSendRequest={sendRequest}
+        onInviteMatch={openInviteMatch}
         onEditMatch={openEditMatch}
         onDeleteMatch={deleteMatch}
         onCancelAgreedMatch={cancelAgreedMatch}
         onOpenChat={(requestId) => {
           openChatRequest(requestId);
         }}
+      />
+
+      <InviteCoachModal
+        match={inviteMatch}
+        phone={invitePhone}
+        teamName={inviteTeamName}
+        feedback={inviteFeedback}
+        isSending={isSendingInvite}
+        onPhoneChange={setInvitePhone}
+        onTeamNameChange={setInviteTeamName}
+        onClose={() => setInviteMatch(null)}
+        onSubmit={sendMatchInvitation}
+      />
+
+      <ExternalInvitationModal
+        visible={externalInvitationVisible}
+        invitation={externalInvitation}
+        currentProfile={currentProfile}
+        feedback={externalInvitationFeedback}
+        isLoading={isLoadingExternalInvitation}
+        isSaving={isAcceptingExternalInvitation}
+        onClose={closeExternalInvitation}
+        onAccept={acceptExternalInvitation}
+        onDecline={declineExternalInvitation}
       />
 
       <RequestDetailsModal
@@ -3588,6 +3845,41 @@ function getLegalPageFromPath(): "privacy" | "terms" | "deletion" | null {
   return null;
 }
 
+function getInviteTokenFromUrl(url: string | null | undefined) {
+  if (!url) {
+    return "";
+  }
+
+  try {
+    const parsedUrl = new URL(url);
+    const queryToken = parsedUrl.searchParams.get("invite");
+
+    if (queryToken) {
+      return queryToken.trim();
+    }
+
+    const pathParts = parsedUrl.pathname.split("/").filter(Boolean);
+    const inviteIndex = pathParts.findIndex((part) => part.toLowerCase() === "invite");
+
+    if (inviteIndex >= 0 && pathParts[inviteIndex + 1]) {
+      return pathParts[inviteIndex + 1].trim();
+    }
+  } catch {
+    const match = url.match(/[?&]invite=([^&]+)/i) ?? url.match(/invite\/([^/?#]+)/i);
+    return match ? decodeURIComponent(match[1]).trim() : "";
+  }
+
+  return "";
+}
+
+function getInviteTokenFromCurrentLocation() {
+  if (typeof window === "undefined" || !window.location) {
+    return "";
+  }
+
+  return getInviteTokenFromUrl(window.location.href);
+}
+
 function TeamProfileScreen({
   authUserId,
   email,
@@ -4029,11 +4321,11 @@ function ProfileEditModal({
 
   const confirmDeleteTeam = (teamProfile: TeamProfile) => {
     if (profiles.length <= 1) {
-      setFeedback("Du mÃ¥ ha minst ett lag i appen.");
+      setFeedback("Du må ha minst ett lag i appen.");
       return;
     }
 
-    const deleteMessage = `${formatProfileTeamLine(teamProfile)} fjernes fra appen. Kamper og forespÃ¸rsler som hÃ¸rer til laget kan ogsÃ¥ bli fjernet.`;
+    const deleteMessage = `${formatProfileTeamLine(teamProfile)} fjernes fra appen. Kamper og forespørsler som hører til laget kan også bli fjernet.`;
 
     if (typeof window !== "undefined" && typeof window.confirm === "function") {
       if (window.confirm(`Slette lag?\n\n${deleteMessage}`)) {
@@ -5460,6 +5752,7 @@ function MatchDetailsModal({
   onRefresh,
   onClose,
   onSendRequest,
+  onInviteMatch,
   onEditMatch,
   onDeleteMatch,
   onCancelAgreedMatch,
@@ -5475,6 +5768,7 @@ function MatchDetailsModal({
   onRefresh: () => void;
   onClose: () => void;
   onSendRequest: (match: Match) => void;
+  onInviteMatch: (match: Match) => void;
   onEditMatch: (match: Match) => void;
   onDeleteMatch: (match: Match) => void;
   onCancelAgreedMatch: (match: Match) => void;
@@ -5609,6 +5903,12 @@ function MatchDetailsModal({
                 <Ionicons name="create-outline" size={18} color={colors.greenDark} />
                 <Text style={styles.secondaryButtonText}>Rediger kamp</Text>
               </Pressable>
+              {match.status === "ledig" ? (
+                <Pressable style={styles.secondaryButtonFull} onPress={() => onInviteMatch(match)}>
+                  <Ionicons name="paper-plane-outline" size={18} color={colors.greenDark} />
+                  <Text style={styles.secondaryButtonText}>Inviter trener</Text>
+                </Pressable>
+              ) : null}
               {match.status === "avtalt" ? (
                 <Pressable
                   style={[styles.dangerButton, isCancelingMatch && styles.disabledButton]}
@@ -5645,6 +5945,199 @@ function MatchDetailsModal({
   return (
     <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
       {content}
+    </Modal>
+  );
+}
+
+function InviteCoachModal({
+  match,
+  phone,
+  teamName,
+  feedback,
+  isSending,
+  onPhoneChange,
+  onTeamNameChange,
+  onClose,
+  onSubmit
+}: {
+  match: Match | null;
+  phone: string;
+  teamName: string;
+  feedback: string | null;
+  isSending: boolean;
+  onPhoneChange: (value: string) => void;
+  onTeamNameChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  if (!match) {
+    return null;
+  }
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <SafeAreaView style={styles.modalSafe}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={styles.modalKeyboard}
+        >
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Inviter trener</Text>
+            <Pressable onPress={onClose} style={styles.closeButton}>
+              <Ionicons name="close" size={24} color={colors.text} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={styles.modalScroll}
+            contentContainerStyle={styles.details}
+            keyboardShouldPersistTaps="handled"
+          >
+            <View style={styles.emptyState}>
+              <Text style={styles.cardTitle}>{formatTeamName(match.hostClub, match.hostTeam)}</Text>
+              <Text style={styles.cardCompactMeta}>
+                {[formatSport(match.sport), getAgeGroupDisplay(match.ageGroup), `${match.date} ${match.time}`, match.place]
+                  .filter(Boolean)
+                  .join(" · ")}
+              </Text>
+            </View>
+
+            <Text style={styles.sectionTitle}>Mottaker</Text>
+            <Text style={styles.label}>Telefonnummer</Text>
+            <TextInput
+              value={phone}
+              onChangeText={onPhoneChange}
+              placeholder="Eks. 97726118"
+              placeholderTextColor={colors.muted}
+              keyboardType="phone-pad"
+              style={styles.input}
+            />
+
+            <Text style={styles.label}>Lag/navn i SMS</Text>
+            <TextInput
+              value={teamName}
+              onChangeText={onTeamNameChange}
+              placeholder="Eks. Drafn G10"
+              placeholderTextColor={colors.muted}
+              style={styles.input}
+            />
+
+            <Text style={styles.paragraph}>
+              Treneren får en SMS med kampinfo og en lenke til Playr. Hvis treneren ikke har bruker, kan
+              vedkommende registrere seg før invitasjonen godkjennes.
+            </Text>
+
+            {feedback ? <Text style={styles.formError}>{feedback}</Text> : null}
+
+            <Pressable
+              style={[styles.primaryButtonFull, isSending && styles.disabledButton]}
+              disabled={isSending}
+              onPress={onSubmit}
+            >
+              <Ionicons name="paper-plane-outline" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryButtonText}>{isSending ? "Sender..." : "Send invitasjon"}</Text>
+            </Pressable>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+function ExternalInvitationModal({
+  visible,
+  invitation,
+  currentProfile,
+  feedback,
+  isLoading,
+  isSaving,
+  onClose,
+  onAccept,
+  onDecline
+}: {
+  visible: boolean;
+  invitation: ExternalMatchInvitation | null;
+  currentProfile: TeamProfile;
+  feedback: string | null;
+  isLoading: boolean;
+  isSaving: boolean;
+  onClose: () => void;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  if (!visible) {
+    return null;
+  }
+
+  const match = invitation?.match ?? null;
+
+  return (
+    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+      <SafeAreaView style={styles.modalSafe}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Kampinvitasjon</Text>
+          <Pressable onPress={onClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color={colors.text} />
+          </Pressable>
+        </View>
+
+        <ScrollView style={styles.modalScroll} contentContainerStyle={styles.details}>
+          {isLoading ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.paragraph}>Henter invitasjon...</Text>
+            </View>
+          ) : match ? (
+            <>
+              <View style={styles.emptyState}>
+                <Text style={styles.cardTitle}>{formatTeamName(match.hostClub, match.hostTeam)}</Text>
+                <Text style={styles.cardCompactMeta}>
+                  {[formatSport(match.sport), getAgeGroupDisplay(match.ageGroup), `${match.date} ${match.time}`, match.place]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Text>
+              </View>
+
+              <Text style={styles.sectionTitle}>Invitasjon</Text>
+              <DetailRow label="Invitert lag" value={invitation?.invitedTeamName || "Ikke oppgitt"} />
+              <DetailRow label="Du svarer som" value={formatTeamName(currentProfile.club, currentProfile.team)} />
+              <DetailRow label="Dato" value={`${match.date} ${match.time}`} />
+              <DetailRow label="Bane/sted" value={match.place} />
+              <DetailRow label="Kontakt" value={match.contactName} />
+
+              <Text style={styles.paragraph}>
+                Når du godkjenner invitasjonen blir kampen avtalt i Playr, og begge trenere får bekreftelse.
+              </Text>
+            </>
+          ) : (
+            <View style={styles.emptyState}>
+              <Text style={styles.paragraph}>Invitasjonen kunne ikke vises.</Text>
+            </View>
+          )}
+
+          {feedback ? <Text style={styles.formError}>{feedback}</Text> : null}
+
+          {match ? (
+            <View style={styles.actionStack}>
+              <Pressable
+                style={[styles.primaryButtonFull, isSaving && styles.disabledButton]}
+                disabled={isSaving}
+                onPress={onAccept}
+              >
+                <Text style={styles.primaryButtonText}>
+                  {isSaving ? "Godkjenner..." : "Godkjenn invitasjon"}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.secondaryButtonFull, isSaving && styles.disabledButton]}
+                disabled={isSaving}
+                onPress={onDecline}
+              >
+                <Text style={styles.secondaryButtonText}>Avslå invitasjon</Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </ScrollView>
+      </SafeAreaView>
     </Modal>
   );
 }
@@ -6369,6 +6862,26 @@ function mapDatabaseMatch(row: DatabaseMatchRow): Match {
     status: row.status,
     approvedRequestId: row.approved_request_id ?? undefined
   };
+}
+
+function mapInvitationMatch(row: any): Match {
+  return mapDatabaseMatch({
+    id: row.id,
+    sport: row.sport,
+    title: row.title ?? "",
+    age_group: row.age_group,
+    level: row.level ?? "",
+    match_date: row.match_date,
+    match_time: row.match_time,
+    place: row.place ?? "",
+    city: row.city ?? "",
+    match_type: row.match_type ?? "Treningskamp",
+    comment: row.comment ?? "",
+    status: row.status,
+    approved_request_id: row.approved_request_id ?? null,
+    host_team_id: row.host_team_id,
+    teams: row.teams
+  } as DatabaseMatchRow);
 }
 
 function mapDatabaseRequest(row: DatabaseRequestRow): MatchRequest {
