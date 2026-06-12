@@ -1126,7 +1126,6 @@ function PlayrApp({
     ? currentChatNotifications.matchIds
     : new Set<string>();
   const openChatRequest = useCallback((requestId: string) => {
-    setSelectedMatchId(null);
     setSelectedRequestId(requestId);
   }, []);
   const openCreateMatch = () => {
@@ -1795,8 +1794,6 @@ function PlayrApp({
 
     setEditForm(createFormFromMatch(match));
     setEditFeedback(null);
-    setSelectedMatchId(null);
-    setSelectedRequestId(null);
     setEditMatchId(match.id);
   };
 
@@ -1974,8 +1971,6 @@ function PlayrApp({
       return;
     }
 
-    setSelectedMatchId(null);
-    setSelectedRequestId(null);
     setInviteMatch(match);
     setInvitePhone("");
     setInviteTeamName("");
@@ -3179,16 +3174,6 @@ function PlayrApp({
         onSubmit={createMatch}
       />
 
-      <EditMatchModal
-        match={editingMatch}
-        form={editForm}
-        feedback={editFeedback}
-        isSaving={isUpdatingMatch}
-        onChange={setEditForm}
-        onClose={() => setEditMatchId(null)}
-        onSubmit={updateMatch}
-      />
-
       <ProfileEditModal
         visible={profileEditVisible}
         profile={currentProfile}
@@ -3229,6 +3214,16 @@ function PlayrApp({
         onOpenChat={(requestId) => {
           openChatRequest(requestId);
         }}
+      />
+
+      <EditMatchModal
+        match={editingMatch}
+        form={editForm}
+        feedback={editFeedback}
+        isSaving={isUpdatingMatch}
+        onChange={setEditForm}
+        onClose={() => setEditMatchId(null)}
+        onSubmit={updateMatch}
       />
 
       <InviteCoachModal
@@ -5694,7 +5689,7 @@ function EditMatchModal({
   }
 
   return (
-    <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal visible animationType="none" presentationStyle="overFullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -5991,7 +5986,7 @@ function InviteCoachModal({
   }
 
   return (
-    <Modal visible animationType="slide" presentationStyle="fullScreen" onRequestClose={onClose}>
+    <Modal visible animationType="none" presentationStyle="overFullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
