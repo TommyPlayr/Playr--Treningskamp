@@ -1126,8 +1126,8 @@ function PlayrApp({
     ? currentChatNotifications.matchIds
     : new Set<string>();
   const openChatRequest = useCallback((requestId: string) => {
-    setSelectedRequestId(requestId);
     setSelectedMatchId(null);
+    setSelectedRequestId(requestId);
   }, []);
   const openCreateMatch = () => {
     setForm(createEmptyForm(currentProfile));
@@ -1795,8 +1795,9 @@ function PlayrApp({
 
     setEditForm(createFormFromMatch(match));
     setEditFeedback(null);
+    setSelectedMatchId(null);
+    setSelectedRequestId(null);
     setEditMatchId(match.id);
-    setTimeout(() => setSelectedMatchId(null), 0);
   };
 
   const updateMatch = async () => {
@@ -1973,6 +1974,8 @@ function PlayrApp({
       return;
     }
 
+    setSelectedMatchId(null);
+    setSelectedRequestId(null);
     setInviteMatch(match);
     setInvitePhone("");
     setInviteTeamName("");
@@ -4651,8 +4654,6 @@ function PlayrLoadingScreen() {
           <View style={[styles.loadingLogoDot, styles.loadingLogoDotRight]} />
           <View style={[styles.loadingLogoArc, styles.loadingLogoArcTop]} />
           <View style={[styles.loadingLogoArc, styles.loadingLogoArcBottom]} />
-          <View style={[styles.loadingLogoArrow, styles.loadingLogoArrowTop]} />
-          <View style={[styles.loadingLogoArrow, styles.loadingLogoArrowBottom]} />
         </Animated.View>
         <Text style={styles.loadingLogoText}>Playr</Text>
       </View>
@@ -5855,6 +5856,13 @@ function MatchDetailsModal({
               </Text>
             </View>
 
+          {isOwnMatch && match.status === "ledig" ? (
+            <Pressable style={styles.secondaryButtonFull} onPress={() => onInviteMatch(match)}>
+              <Ionicons name="paper-plane-outline" size={18} color={colors.greenDark} />
+              <Text style={styles.secondaryButtonText}>Inviter trener/lag</Text>
+            </Pressable>
+          ) : null}
+
           <Text style={styles.sectionTitle}>Kampinfo</Text>
           <DetailRow label="Idrett" value={formatSport(match.sport)} />
           <DetailRow label="Alder" value={getAgeGroupDisplay(match.ageGroup)} />
@@ -5917,12 +5925,6 @@ function MatchDetailsModal({
                 <Ionicons name="create-outline" size={18} color={colors.greenDark} />
                 <Text style={styles.secondaryButtonText}>Rediger kamp</Text>
               </Pressable>
-              {match.status === "ledig" ? (
-                <Pressable style={styles.secondaryButtonFull} onPress={() => onInviteMatch(match)}>
-                  <Ionicons name="paper-plane-outline" size={18} color={colors.greenDark} />
-                  <Text style={styles.secondaryButtonText}>Inviter trener</Text>
-                </Pressable>
-              ) : null}
               {match.status === "avtalt" ? (
                 <Pressable
                   style={[styles.dangerButton, isCancelingMatch && styles.disabledButton]}
@@ -7218,62 +7220,41 @@ function createStyles(colors: typeof lightColors) {
     justifyContent: "center"
   },
   loadingLogoIcon: {
-    height: 64,
+    height: 86,
     position: "relative",
-    width: 128
+    width: 162
   },
   loadingLogoDot: {
     backgroundColor: colors.black,
     borderRadius: 999,
-    height: 22,
+    height: 36,
     position: "absolute",
-    top: 21,
-    width: 22,
+    top: 25,
+    width: 36,
     zIndex: 3
   },
   loadingLogoDotLeft: {
-    left: 16
+    left: 4
   },
   loadingLogoDotRight: {
-    right: 16
+    right: 4
   },
   loadingLogoArc: {
     borderColor: colors.green,
     borderRadius: 999,
-    borderWidth: 8,
-    height: 54,
-    left: 30,
+    borderWidth: 12,
+    height: 76,
+    left: 28,
     position: "absolute",
-    width: 68
+    width: 106
   },
   loadingLogoArcTop: {
     borderBottomColor: "transparent",
-    top: 2
+    top: 0
   },
   loadingLogoArcBottom: {
     borderTopColor: "transparent",
-    bottom: 2
-  },
-  loadingLogoArrow: {
-    borderColor: colors.green,
-    borderLeftColor: "transparent",
-    borderTopColor: "transparent",
-    borderRadius: 2,
-    borderWidth: 5,
-    height: 20,
-    position: "absolute",
-    width: 20,
-    zIndex: 4
-  },
-  loadingLogoArrowTop: {
-    right: 29,
-    top: 12,
-    transform: [{ rotate: "-26deg" }]
-  },
-  loadingLogoArrowBottom: {
-    bottom: 12,
-    left: 29,
-    transform: [{ rotate: "154deg" }]
+    bottom: 0
   },
   loadingLogoText: {
     color: colors.black,
