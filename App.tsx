@@ -5689,8 +5689,7 @@ function EditMatchModal({
   }
 
   return (
-    <Modal visible animationType="none" presentationStyle="overFullScreen" onRequestClose={onClose}>
-      <SafeAreaView style={styles.modalSafe}>
+      <SafeAreaView style={[styles.modalSafe, styles.topModalOverlay]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
@@ -5747,7 +5746,6 @@ function EditMatchModal({
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </Modal>
   );
 }
 
@@ -5811,8 +5809,8 @@ function MatchDetailsModal({
     match.place
   ].filter(Boolean);
 
-  const content = (
-      <SafeAreaView style={[styles.modalSafe, Platform.OS === "android" && styles.requestDetailsOverlay]}>
+  return (
+      <SafeAreaView style={[styles.modalSafe, styles.requestDetailsOverlay]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
@@ -5948,16 +5946,6 @@ function MatchDetailsModal({
         </KeyboardAvoidingView>
       </SafeAreaView>
   );
-
-  if (Platform.OS === "android") {
-    return content;
-  }
-
-  return (
-    <Modal visible animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
-      {content}
-    </Modal>
-  );
 }
 
 function InviteCoachModal({
@@ -5986,8 +5974,7 @@ function InviteCoachModal({
   }
 
   return (
-    <Modal visible animationType="none" presentationStyle="overFullScreen" onRequestClose={onClose}>
-      <SafeAreaView style={styles.modalSafe}>
+      <SafeAreaView style={[styles.modalSafe, styles.topModalOverlay]}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.modalKeyboard}
@@ -6051,7 +6038,6 @@ function InviteCoachModal({
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
-    </Modal>
   );
 }
 
@@ -8545,6 +8531,11 @@ function createStyles(colors: typeof lightColors) {
     ...StyleSheet.absoluteFillObject,
     elevation: 40,
     zIndex: 40
+  },
+  topModalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    elevation: 80,
+    zIndex: 80
   },
   modalKeyboard: {
     flex: 1
