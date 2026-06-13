@@ -117,7 +117,6 @@ function formatTime(value: string | null) {
 function createToken() {
   const bytes = new Uint8Array(24);
   crypto.getRandomValues(bytes);
-
   return Array.from(bytes)
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("");
@@ -131,26 +130,25 @@ function buildInviteUrl(token: string) {
   return `${getBaseUrl()}/?invite=${encodeURIComponent(token)}`;
 }
 
-function buildInviteMessage(match: MatchRow, phone: string, invitedTeamName: string | undefined, token: string) {
+function buildInviteMessage(match: MatchRow, invitedTeamName: string | undefined, token: string) {
   const hostTeam = formatTeamName(match.teams);
   const invitedTeam = invitedTeamName?.trim() || "laget ditt";
   const ageAndLevel = [match.age_group, match.level].filter(Boolean).join(" - ");
   const place = [match.place, match.city].filter(Boolean).join(", ");
 
   return [
-    "Playr: Invitasjon til treningskamp",
+    "Playr kampinvitasjon",
     "",
-    `${hostTeam} inviterer ${invitedTeam} til kamp.`,
-    `${match.sport}${ageAndLevel ? ` ${ageAndLevel}` : ""}`,
-    `Dato: ${formatDate(match.match_date)}`,
-    `Tid: ${formatTime(match.match_time)}`,
-    `Sted: ${place || "Ikke satt"}`,
+    `${hostTeam} inviterer ${invitedTeam} til treningskamp.`,
+    "",
+    "Kamp:",
+    `${match.sport}${ageAndLevel ? ` · ${ageAndLevel}` : ""}`,
+    `${formatDate(match.match_date)} kl. ${formatTime(match.match_time)}`,
+    place || "Sted: Ikke satt",
     match.comment ? `Info: ${match.comment}` : "",
     "",
-    "Se kampen og svar her:",
-    buildInviteUrl(token),
-    "",
-    `Sendt til ${phone}`
+    "Svar på invitasjonen her:",
+    buildInviteUrl(token)
   ].filter(Boolean).join("\n");
 }
 
@@ -195,12 +193,7 @@ async function sendSms(phone: string, body: string) {
   );
 
   const data = (await response.json().catch(() => ({}))) as Record<string, any>;
-
-  return {
-    ok: response.ok,
-    status: response.status,
-    data
-  };
+  return { ok: response.ok, status: response.status, data };
 }
 
 async function getUserFromRequest(supabase: ReturnType<typeof createClient>, request: Request) {
@@ -319,7 +312,7 @@ Deno.serve(async (request) => {
     }
 
     const token = createToken();
-    const message = buildInviteMessage(match, phone, invitedTeamName, token);
+    const message = buildInviteMessage(match, invitedTeamName, token);
     const smsResult = await sendSms(phone, message);
 
     const { data: invitationData, error: invitationError } = await supabase
@@ -342,11 +335,7 @@ Deno.serve(async (request) => {
     }
 
     if (!smsResult.ok) {
-      return jsonResponse({
-        ok: false,
-        error: "SMS-invitasjonen ble ikke sendt.",
-        smsResult
-      }, 502);
+      return jsonResponse({ ok: false, error: "SMS-invitasjonen ble ikke sendt.", smsResult }, 502);
     }
 
     return jsonResponse({
@@ -366,10 +355,7 @@ Deno.serve(async (request) => {
 
     const { error } = await supabase
       .from("match_invitations")
-      .update({
-        status: "declined",
-        updated_at: new Date().toISOString()
-      })
+      .update({ status: "declined", updated_at: new Date().toISOString() })
       .eq("token", token)
       .eq("status", "pending");
 
@@ -401,12 +387,8 @@ Deno.serve(async (request) => {
     if (new Date(invitation.expires_at).getTime() < Date.now()) {
       await supabase
         .from("match_invitations")
-        .update({
-          status: "expired",
-          updated_at: new Date().toISOString()
-        })
+        .update({ status: "expired", updated_at: new Date().toISOString() })
         .eq("id", invitation.id);
-
       return jsonResponse({ error: "Invitasjonen er utløpt." }, 410);
     }
 
@@ -433,9 +415,7 @@ Deno.serve(async (request) => {
     }
 
     if (fromTeam.id === match.host_team_id) {
-      return jsonResponse({
-        error: "Du kan ikke godkjenne invitasjonen med samme lag som inviterte."
-      }, 409);
+      return jsonResponse({ error: "Du kan ikke godkjenne invitasjonen med samme lag som inviterte." }, 409);
     }
 
     const requestMessage =
@@ -451,36 +431,23 @@ Deno.serve(async (request) => {
           message: requestMessage,
           status: "godkjent"
         },
-        {
-          onConflict: "match_id,from_team_id"
-        }
+        { onConflict: "match_id,from_team_id" }
       )
       .select("id")
       .single();
 
     if (requestError || !requestData) {
-      return jsonResponse({
-        error: requestError?.message ?? "Kunne ikke opprette kampforespørsel."
-      }, 500);
+      return jsonResponse({ error: requestError?.message ?? "Kunne ikke opprette kampforespørsel." }, 500);
     }
 
-    const { data: updatedMatch, error: matchUpdateError } = await supabase
+    const { error: matchUpdateError } = await supabase
       .from("matches")
-      .update({
-        status: "avtalt",
-        approved_request_id: requestData.id
-      })
+      .update({ status: "avtalt", approved_request_id: requestData.id })
       .eq("id", match.id)
-      .eq("status", "ledig")
-      .select("id")
-      .maybeSingle();
+      .eq("status", "ledig");
 
     if (matchUpdateError) {
       return jsonResponse({ error: matchUpdateError.message }, 500);
-    }
-
-    if (!updatedMatch) {
-      return jsonResponse({ error: "Kampen ble akkurat avtalt av noen andre." }, 409);
     }
 
     await supabase
@@ -500,11 +467,7 @@ Deno.serve(async (request) => {
       })
       .eq("id", invitation.id);
 
-    return jsonResponse({
-      ok: true,
-      requestId: requestData.id,
-      matchId: match.id
-    });
+    return jsonResponse({ ok: true, requestId: requestData.id, matchId: match.id });
   }
 
   return jsonResponse({ error: "Ukjent handling." }, 400);
