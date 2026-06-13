@@ -5270,12 +5270,13 @@ function MineScreen({
   const myMatches = Array.from(
     new Map([...ownedHostedMatches, ...approvedRequestMatches].map((match) => [match.id, match])).values()
   );
-  const agreedMatchesForAllProfiles = myMatches
-    .filter((match) => match.status === "avtalt")
+  const allAgreedMatchesForAllProfiles = myMatches.filter((match) => match.status === "avtalt");
+  const agreedMatchesForAllProfiles = allAgreedMatchesForAllProfiles
+    .filter((match) => !isMatchExpired(match))
     .sort((a, b) => getMatchDateSortValue(a) - getMatchDateSortValue(b));
-  const completedMatchesForAllProfiles = agreedMatchesForAllProfiles.filter(
-    (match) => match.status === "avtalt" && getMatchDateSortValue(match) < Date.now()
-  );
+  const completedMatchesForAllProfiles = allAgreedMatchesForAllProfiles
+    .filter(isMatchExpired)
+    .sort((a, b) => getMatchDateSortValue(b) - getMatchDateSortValue(a));
   const agreedMyMatches = agreedMatchesForAllProfiles.length;
   const completedMyMatches = completedMatchesForAllProfiles.length;
   const activeHostedMatches = ownedHostedMatches
