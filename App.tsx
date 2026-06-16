@@ -986,19 +986,26 @@ function PlayrApp({
   }, []);
 
   const getNotificationCountsForProfile = (profileId: string) => {
-    const hostedIds = new Set(
-      matches.filter((match) => match.hostTeamId === profileId).map((match) => match.id)
+    const activeHostedIds = new Set(
+      matches
+        .filter(
+          (match) =>
+            match.hostTeamId === profileId &&
+            match.status !== "avtalt" &&
+            !isMatchExpired(match)
+        )
+        .map((match) => match.id)
     );
 
     return {
       incomingIds: requests
-        .filter((request) => hostedIds.has(request.matchId) && request.status === "venter")
+        .filter((request) => activeHostedIds.has(request.matchId) && request.status === "venter")
         .map((request) => request.id),
       approvedIds: requests
         .filter((request) => request.fromTeamId === profileId && request.status === "godkjent")
         .map((request) => request.id),
       incoming: requests.filter(
-        (request) => hostedIds.has(request.matchId) && request.status === "venter"
+        (request) => activeHostedIds.has(request.matchId) && request.status === "venter"
       ).length,
       approved: requests.filter(
         (request) => request.fromTeamId === profileId && request.status === "godkjent"
