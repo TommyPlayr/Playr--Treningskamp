@@ -790,7 +790,7 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setMinimumLoadingDone(true);
-    }, 1400);
+    }, 2200);
 
     return () => clearTimeout(timer);
   }, []);
@@ -4612,24 +4612,20 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
 }
 
 function PlayrLoadingScreen() {
-  const fade = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(0.72)).current;
+  const scale = useRef(new Animated.Value(0.86)).current;
   const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
 
   useEffect(() => {
-    const animation = Animated.sequence([
+    const animation = Animated.parallel([
       Animated.timing(fade, {
         toValue: 1,
-        duration: 450,
+        duration: 2200,
         useNativeDriver: true
       }),
-      Animated.timing(fade, {
-        toValue: 0.35,
-        duration: 400,
-        useNativeDriver: true
-      }),
-      Animated.timing(fade, {
+      Animated.timing(scale, {
         toValue: 1,
-        duration: 450,
+        duration: 2200,
         useNativeDriver: true
       })
     ]);
@@ -4637,14 +4633,14 @@ function PlayrLoadingScreen() {
     animation.start();
 
     return () => animation.stop();
-  }, [fade]);
+  }, [fade, scale]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.loadingScreen}>
         <Animated.Image
           source={markSource}
-          style={[styles.loadingLogoIcon, { opacity: fade }]}
+          style={[styles.loadingLogoIcon, { opacity: fade, transform: [{ scale }] }]}
         />
         <Text style={styles.loadingLogoText}>Playr</Text>
       </View>
