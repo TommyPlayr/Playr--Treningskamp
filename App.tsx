@@ -4615,6 +4615,7 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
 
 function PlayrLoadingScreen() {
   const lettersOpacity = useRef(new Animated.Value(0)).current;
+  const [lettersVisible, setLettersVisible] = useState(false);
   const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
 
   useEffect(() => {
@@ -4627,7 +4628,12 @@ function PlayrLoadingScreen() {
       })
     ]);
 
-    animation.start();
+    animation.start(({ finished }) => {
+      if (finished) {
+        lettersOpacity.setValue(1);
+        setLettersVisible(true);
+      }
+    });
 
     return () => animation.stop();
   }, [lettersOpacity]);
@@ -4636,11 +4642,11 @@ function PlayrLoadingScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.loadingScreen}>
         <View style={styles.loadingLogoCard}>
-          <Image source={markSource} style={styles.loadingLogoIcon} />
+          <Image fadeDuration={0} source={markSource} style={styles.loadingLogoIcon} />
           <Animated.Text
             style={[
               styles.loadingLogoLetters,
-              { opacity: lettersOpacity }
+              { opacity: lettersVisible ? 1 : lettersOpacity }
             ]}
           >
             layr
@@ -7364,7 +7370,7 @@ function createStyles(colors: typeof lightColors) {
     fontWeight: "700",
     letterSpacing: 0,
     lineHeight: 50,
-    marginLeft: 0
+    marginLeft: -6
   },
   loadingText: {
     color: colors.greenDark,
