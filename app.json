@@ -10,17 +10,14 @@
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
-      "backgroundColor": "#F8FBF7"
+      "backgroundColor": "#07110B"
     },
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.playrmatch.playr",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "bundleIdentifier": "com.playrmatch.playr"
     },
     "android": {
       "package": "com.playrmatch.playr",
@@ -29,10 +26,11 @@
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F8FBF7"
+        "backgroundColor": "#07110B"
       }
     },
     "plugins": [
+      "expo-notifications",
       [
         "expo-build-properties",
         {

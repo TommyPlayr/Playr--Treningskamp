@@ -7,6 +7,7 @@ import {
   AppState,
   Easing,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -36,6 +37,8 @@ import * as Notifications from "expo-notifications";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
+const playrMarkWhiteGreen = require("./assets/playr-mark-white-green.png");
+const playrMarkBlackGreen = require("./assets/playr-mark-black-green.png");
 const EXPO_PROJECT_ID = "4d8e55d1-1918-436c-8afd-bba8630461e4";
 const keyboardAvoidingBehavior = Platform.OS === "ios" ? "padding" : "height";
 
@@ -4566,14 +4569,14 @@ function AppFeedbackModal({
 }
 
 function PlayrLogo({ compact = false }: { compact?: boolean }) {
+  const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
+
   return (
     <View style={[styles.logoMarkWrap, compact && styles.logoMarkWrapCompact]}>
-      <View style={[styles.logoIcon, compact && styles.logoIconCompact]}>
-        <View style={[styles.logoDot, styles.logoDotLeft, compact && styles.logoDotCompact]} />
-        <View style={[styles.logoDot, styles.logoDotRight, compact && styles.logoDotCompact]} />
-        <View style={[styles.logoArc, styles.logoArcTop, compact && styles.logoArcCompact]} />
-        <View style={[styles.logoArc, styles.logoArcBottom, compact && styles.logoArcCompact]} />
-      </View>
+      <Image
+        source={markSource}
+        style={[styles.logoIcon, compact && styles.logoIconCompact]}
+      />
       <Text style={[styles.logo, compact && styles.logoCompact]}>Playr</Text>
     </View>
   );
@@ -4592,16 +4595,15 @@ function PlayrVision() {
 
 function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
   const isAuth = variant === "auth";
+  const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
 
   return (
     <View
       pointerEvents="none"
       style={[styles.playrPattern, isAuth ? styles.playrPatternAuth : styles.playrPatternHome]}
     >
-      <View style={[styles.patternLogoArc, styles.patternLogoArcOne]} />
-      <View style={[styles.patternLogoArc, styles.patternLogoArcTwo]} />
-      <View style={[styles.patternLogoDot, styles.patternLogoDotOne]} />
-      <View style={[styles.patternLogoDot, styles.patternLogoDotTwo]} />
+      <Image source={markSource} style={[styles.patternLogoMark, styles.patternLogoMarkOne]} />
+      <Image source={markSource} style={[styles.patternLogoMark, styles.patternLogoMarkTwo]} />
       <View style={[styles.patternMatchMarker, styles.patternMatchMarkerOne]} />
       <View style={[styles.patternMatchMarker, styles.patternMatchMarkerTwo]} />
       <View style={[styles.patternMatchMarker, styles.patternMatchMarkerThree]} />
@@ -4613,6 +4615,7 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
 
 function PlayrLoadingScreen() {
   const rotation = useRef(new Animated.Value(0)).current;
+  const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
 
   useEffect(() => {
     const animation = Animated.loop(
@@ -4637,12 +4640,10 @@ function PlayrLoadingScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.loadingScreen}>
-        <Animated.View style={[styles.loadingLogoIcon, { transform: [{ rotate }] }]}>
-          <View style={[styles.loadingLogoDot, styles.loadingLogoDotLeft]} />
-          <View style={[styles.loadingLogoDot, styles.loadingLogoDotRight]} />
-          <View style={[styles.loadingLogoArc, styles.loadingLogoArcTop]} />
-          <View style={[styles.loadingLogoArc, styles.loadingLogoArcBottom]} />
-        </Animated.View>
+        <Animated.Image
+          source={markSource}
+          style={[styles.loadingLogoIcon, { transform: [{ rotate }] }]}
+        />
         <Text style={styles.loadingLogoText}>Playr</Text>
       </View>
     </SafeAreaView>
@@ -7308,41 +7309,9 @@ function createStyles(colors: typeof lightColors) {
     justifyContent: "center"
   },
   loadingLogoIcon: {
-    height: 86,
-    position: "relative",
-    width: 162
-  },
-  loadingLogoDot: {
-    backgroundColor: colors.black,
-    borderRadius: 999,
-    height: 36,
-    position: "absolute",
-    top: 25,
-    width: 36,
-    zIndex: 3
-  },
-  loadingLogoDotLeft: {
-    left: 4
-  },
-  loadingLogoDotRight: {
-    right: 4
-  },
-  loadingLogoArc: {
-    borderColor: colors.green,
-    borderRadius: 999,
-    borderWidth: 12,
-    height: 76,
-    left: 28,
-    position: "absolute",
-    width: 106
-  },
-  loadingLogoArcTop: {
-    borderBottomColor: "transparent",
-    top: 0
-  },
-  loadingLogoArcBottom: {
-    borderTopColor: "transparent",
-    bottom: 0
+    height: 96,
+    resizeMode: "contain",
+    width: 96
   },
   loadingLogoText: {
     color: colors.black,
@@ -7752,36 +7721,21 @@ function createStyles(colors: typeof lightColors) {
     opacity: 0.58,
     transform: [{ rotate: "6deg" }, { scale: 1.06 }]
   },
-  patternLogoArc: {
-    borderColor: "rgba(90, 168, 95, 0.13)",
-    borderRadius: 999,
-    borderWidth: 10,
+  patternLogoMark: {
     height: 168,
+    opacity: 0.13,
     position: "absolute",
-    width: 270
+    resizeMode: "contain",
+    width: 168
   },
-  patternLogoArcOne: {
-    right: -126,
-    top: 54
+  patternLogoMarkOne: {
+    right: -42,
+    top: 36
   },
-  patternLogoArcTwo: {
+  patternLogoMarkTwo: {
     bottom: 18,
-    left: -132
-  },
-  patternLogoDot: {
-    backgroundColor: "rgba(12, 27, 20, 0.07)",
-    borderRadius: 999,
-    height: 24,
-    position: "absolute",
-    width: 24
-  },
-  patternLogoDotOne: {
-    right: 54,
-    top: 86
-  },
-  patternLogoDotTwo: {
-    bottom: 72,
-    left: 48
+    left: -48,
+    transform: [{ rotate: "180deg" }]
   },
   patternMatchMarker: {
     backgroundColor: "rgba(255, 255, 255, 0.78)",
@@ -7829,58 +7783,15 @@ function createStyles(colors: typeof lightColors) {
     marginTop: 10
   },
   logoIcon: {
-    height: 34,
+    height: 64,
     marginBottom: 5,
-    position: "relative",
-    width: 92
+    resizeMode: "contain",
+    width: 64
   },
   logoIconCompact: {
-    height: 18,
+    height: 34,
     marginBottom: 0,
-    width: 52
-  },
-  logoDot: {
-    backgroundColor: colors.black,
-    borderRadius: 999,
-    height: 11,
-    position: "absolute",
-    top: 12,
-    width: 11,
-    zIndex: 2
-  },
-  logoDotCompact: {
-    height: 7,
-    top: 6,
-    width: 7
-  },
-  logoDotLeft: {
-    left: 18
-  },
-  logoDotRight: {
-    right: 18
-  },
-  logoArc: {
-    borderColor: colors.green,
-    borderRadius: 999,
-    borderWidth: 4,
-    height: 30,
-    left: 22,
-    position: "absolute",
-    width: 48
-  },
-  logoArcCompact: {
-    borderWidth: 3,
-    height: 17,
-    left: 12,
-    width: 28
-  },
-  logoArcTop: {
-    borderBottomColor: "transparent",
-    top: 0
-  },
-  logoArcBottom: {
-    borderTopColor: "transparent",
-    bottom: 0
+    width: 34
   },
   logo: {
     color: colors.black,
