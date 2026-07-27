@@ -4614,54 +4614,38 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
 }
 
 function PlayrLoadingScreen() {
-  const logoScale = useRef(new Animated.Value(0.82)).current;
   const lettersOpacity = useRef(new Animated.Value(0)).current;
-  const lettersShift = useRef(new Animated.Value(-10)).current;
   const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
 
   useEffect(() => {
-    const animation = Animated.parallel([
-      Animated.timing(logoScale, {
+    const animation = Animated.sequence([
+      Animated.delay(280),
+      Animated.timing(lettersOpacity, {
         toValue: 1,
-        duration: 2200,
+        duration: 1600,
         useNativeDriver: true
-      }),
-      Animated.sequence([
-        Animated.delay(320),
-        Animated.parallel([
-          Animated.timing(lettersOpacity, {
-            toValue: 1,
-            duration: 1380,
-            useNativeDriver: true
-          }),
-          Animated.timing(lettersShift, {
-            toValue: 0,
-            duration: 1380,
-            useNativeDriver: true
-          })
-        ])
-      ])
+      })
     ]);
 
     animation.start();
 
     return () => animation.stop();
-  }, [lettersOpacity, lettersShift, logoScale]);
+  }, [lettersOpacity]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.loadingScreen}>
-        <Animated.View style={[styles.loadingLogoCard, { transform: [{ scale: logoScale }] }]}>
+        <View style={styles.loadingLogoCard}>
           <Image source={markSource} style={styles.loadingLogoIcon} />
           <Animated.Text
             style={[
               styles.loadingLogoLetters,
-              { opacity: lettersOpacity, transform: [{ translateX: lettersShift }] }
+              { opacity: lettersOpacity }
             ]}
           >
             layr
           </Animated.Text>
-        </Animated.View>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -7361,7 +7345,7 @@ function createStyles(colors: typeof lightColors) {
   loadingLogoCard: {
     alignItems: "center",
     backgroundColor: "transparent",
-    borderColor: colors.text,
+    borderColor: "#FFFFFF",
     borderRadius: 10,
     borderWidth: 1,
     flexDirection: "row",
