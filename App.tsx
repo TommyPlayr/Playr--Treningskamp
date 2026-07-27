@@ -37,6 +37,7 @@ import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-cont
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
 
 const EXPO_PROJECT_ID = "4d8e55d1-1918-436c-8afd-bba8630461e4";
+const keyboardAvoidingBehavior = Platform.OS === "ios" ? "padding" : "height";
 
 if (Platform.OS !== "web") {
   Notifications.setNotificationHandler({
@@ -3467,10 +3468,7 @@ function AuthScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style={colors.background === darkColors.background ? "light" : "dark"} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.authScreen}
-      >
+      <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.authScreen}>
         <ScrollView
           contentContainerStyle={styles.authContent}
           keyboardShouldPersistTaps="handled"
@@ -3608,10 +3606,7 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style={colors.background === darkColors.background ? "light" : "dark"} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.authScreen}
-      >
+      <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.authScreen}>
         <ScrollView
           contentContainerStyle={styles.authContent}
           keyboardShouldPersistTaps="handled"
@@ -4121,10 +4116,7 @@ function TeamProfileScreen({
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style={colors.background === darkColors.background ? "light" : "dark"} />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        style={styles.authScreen}
-      >
+      <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.authScreen}>
         <ScrollView contentContainerStyle={styles.profileSetupContent} keyboardShouldPersistTaps="handled">
           <Pressable style={styles.profileSetupBackButton} onPress={onBackToLogin}>
             <Ionicons name="chevron-back" size={18} color={colors.greenDark} />
@@ -4381,10 +4373,7 @@ function ProfileEditModal({
   return (
     <Modal visible={visible} animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.modalKeyboard}
-        >
+        <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.modalKeyboard}>
           <ModalHeaderView>
             <Text style={styles.modalTitle}>Rediger lagprofil</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
@@ -4508,10 +4497,7 @@ function AppFeedbackModal({
   return (
     <Modal visible={visible} animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.modalKeyboard}
-        >
+        <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.modalKeyboard}>
           <ModalHeaderView>
             <Text style={styles.modalTitle}>Gi oss i Playr tilbakemelding</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
@@ -5606,14 +5592,13 @@ function CreateMatchModal({
   onSubmit: () => void;
 }) {
   const showLevelInput = shouldShowLevelInput(form.ageGroup || profile.ageGroup);
+  const dateOptions = getDateDropdownOptions(form.date);
+  const timeOptions = getTimeDropdownOptions(form.time);
 
   return (
     <Modal visible={visible} animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
       <SafeAreaView style={styles.modalSafe}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.modalKeyboard}
-        >
+        <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.modalKeyboard}>
           <ModalHeaderView>
             <Text style={styles.modalTitle}>Legg ut kamp</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
@@ -5635,8 +5620,20 @@ function CreateMatchModal({
             {showLevelInput ? (
               <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
             ) : null}
-            <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026 eller 15-06-26" />
-            <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00 eller 1800" />
+            <DateTimeDropdown
+              label="Dato"
+              value={form.date}
+              placeholder="Velg dato"
+              options={dateOptions}
+              onChange={(date) => onChange({ ...form, date })}
+            />
+            <DateTimeDropdown
+              label="Tid"
+              value={form.time}
+              placeholder="Velg klokkeslett"
+              options={timeOptions}
+              onChange={(time) => onChange({ ...form, time })}
+            />
             <PlaceAutocompleteInput
               value={form.place}
               onChangeText={(place) => onChange({ ...form, place })}
@@ -5695,13 +5692,12 @@ function EditMatchModal({
   if (!match) {
     return null;
   }
+  const dateOptions = getDateDropdownOptions(form.date);
+  const timeOptions = getTimeDropdownOptions(form.time);
 
   return (
       <SafeAreaView style={[styles.modalSafe, styles.topModalOverlay]}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.modalKeyboard}
-        >
+        <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.modalKeyboard}>
           <ModalHeaderView>
             <Text style={styles.modalTitle}>Rediger kamp</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
@@ -5720,8 +5716,20 @@ function EditMatchModal({
             <SportSelect value={form.sport} onChange={(sport) => onChange({ ...form, sport })} />
             <AgeGroupInput value={form.ageGroup} onChangeText={(ageGroup) => onChange({ ...form, ageGroup })} />
             <LevelInput value={form.level} onChangeText={(level) => onChange({ ...form, level })} />
-            <Input label="Dato" value={form.date} onChangeText={(date) => onChange({ ...form, date })} placeholder="Eks: 15.06.2026 eller 15-06-26" />
-            <Input label="Tid" value={form.time} onChangeText={(time) => onChange({ ...form, time })} placeholder="Eks: 18:00 eller 1800" />
+            <DateTimeDropdown
+              label="Dato"
+              value={form.date}
+              placeholder="Velg dato"
+              options={dateOptions}
+              onChange={(date) => onChange({ ...form, date })}
+            />
+            <DateTimeDropdown
+              label="Tid"
+              value={form.time}
+              placeholder="Velg klokkeslett"
+              options={timeOptions}
+              onChange={(time) => onChange({ ...form, time })}
+            />
             <PlaceAutocompleteInput
               value={form.place}
               onChangeText={(place) => onChange({ ...form, place })}
@@ -5819,10 +5827,7 @@ function MatchDetailsModal({
 
   return (
       <SafeAreaView style={[styles.modalSafe, styles.requestDetailsOverlay]}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.modalKeyboard}
-        >
+        <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.modalKeyboard}>
           <ModalHeaderView>
             <Text style={styles.modalTitle}>Kamp</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
@@ -5983,10 +5988,7 @@ function InviteCoachModal({
 
   return (
       <SafeAreaView style={[styles.modalSafe, styles.topModalOverlay]}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.modalKeyboard}
-        >
+        <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.modalKeyboard}>
           <ModalHeaderView>
             <Text style={styles.modalTitle}>Inviter trener</Text>
             <Pressable onPress={onClose} style={styles.closeButton}>
@@ -6210,10 +6212,7 @@ function RequestDetailsModal({
           </Pressable>
         </ChatModalHeaderView>
 
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={styles.modalKeyboard}
-        >
+        <KeyboardAvoidingView behavior={keyboardAvoidingBehavior} style={styles.modalKeyboard}>
           <ScrollView
             alwaysBounceVertical
             contentContainerStyle={styles.details}
@@ -6433,6 +6432,82 @@ function Input({
         returnKeyType={returnKeyType}
         onSubmitEditing={onSubmitEditing}
       />
+    </View>
+  );
+}
+
+function getDateDropdownOptions(selectedDate: string) {
+  const options: { label: string; value: string }[] = [];
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  for (let dayOffset = 0; dayOffset < 365; dayOffset += 1) {
+    const date = new Date(today);
+    date.setDate(today.getDate() + dayOffset);
+    const value = `${String(date.getDate()).padStart(2, "0")}.${String(date.getMonth() + 1).padStart(2, "0")}.${date.getFullYear()}`;
+    const label = date.toLocaleDateString("no-NO", {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric"
+    });
+    options.push({ label, value });
+  }
+
+  if (selectedDate && !options.some((option) => option.value === selectedDate)) {
+    options.unshift({ label: selectedDate, value: selectedDate });
+  }
+
+  return options;
+}
+
+function getTimeDropdownOptions(selectedTime: string) {
+  const options: { label: string; value: string }[] = [];
+
+  for (let hour = 6; hour <= 23; hour += 1) {
+    for (let minute = 0; minute < 60; minute += 15) {
+      const value = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+      options.push({ label: value, value });
+    }
+  }
+
+  if (selectedTime && !options.some((option) => option.value === selectedTime)) {
+    options.unshift({ label: selectedTime, value: selectedTime });
+  }
+
+  return options;
+}
+
+function DateTimeDropdown({
+  label,
+  value,
+  placeholder,
+  options,
+  onChange
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  options: { label: string; value: string }[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <View>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.pickerField}>
+        <Picker
+          selectedValue={value}
+          onValueChange={(nextValue) => onChange(String(nextValue))}
+          style={styles.formPicker}
+          itemStyle={styles.formPickerItem}
+          dropdownIconColor={colors.text}
+        >
+          <Picker.Item label={placeholder} value="" />
+          {options.map((option) => (
+            <Picker.Item key={option.value} label={option.label} value={option.value} />
+          ))}
+        </Picker>
+      </View>
     </View>
   );
 }
