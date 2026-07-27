@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Animated,
   AppState,
-  Easing,
   FlatList,
   Image,
   KeyboardAvoidingView,
@@ -4613,35 +4612,39 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
 }
 
 function PlayrLoadingScreen() {
-  const rotation = useRef(new Animated.Value(0)).current;
+  const fade = useRef(new Animated.Value(0)).current;
   const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.timing(rotation, {
+    const animation = Animated.sequence([
+      Animated.timing(fade, {
         toValue: 1,
-        duration: 1400,
-        easing: Easing.linear,
+        duration: 450,
+        useNativeDriver: true
+      }),
+      Animated.timing(fade, {
+        toValue: 0.35,
+        duration: 400,
+        useNativeDriver: true
+      }),
+      Animated.timing(fade, {
+        toValue: 1,
+        duration: 450,
         useNativeDriver: true
       })
-    );
+    ]);
 
     animation.start();
 
     return () => animation.stop();
-  }, [rotation]);
-
-  const rotate = rotation.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"]
-  });
+  }, [fade]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.loadingScreen}>
         <Animated.Image
           source={markSource}
-          style={[styles.loadingLogoIcon, { transform: [{ rotate }] }]}
+          style={[styles.loadingLogoIcon, { opacity: fade }]}
         />
         <Text style={styles.loadingLogoText}>Playr</Text>
       </View>
