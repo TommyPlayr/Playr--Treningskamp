@@ -829,11 +829,13 @@ export default function App() {
   }
 
   return (
-    <SafeAreaProvider>
-      <StartupErrorBoundary>
-        <PlayrApp themeMode={themeMode} onToggleTheme={toggleThemeMode} />
-      </StartupErrorBoundary>
-    </SafeAreaProvider>
+    <View style={styles.app}>
+      <SafeAreaProvider>
+        <StartupErrorBoundary>
+          <PlayrApp themeMode={themeMode} onToggleTheme={toggleThemeMode} />
+        </StartupErrorBoundary>
+      </SafeAreaProvider>
+    </View>
   );
 }
 
@@ -4615,7 +4617,7 @@ function PlayrLoadingScreen() {
   const logoScale = useRef(new Animated.Value(0.82)).current;
   const lettersOpacity = useRef(new Animated.Value(0)).current;
   const lettersShift = useRef(new Animated.Value(-10)).current;
-  const markSource = playrMarkBlackGreen;
+  const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
 
   useEffect(() => {
     const animation = Animated.parallel([
@@ -7358,18 +7360,14 @@ function createStyles(colors: typeof lightColors) {
   },
   loadingLogoCard: {
     alignItems: "center",
-    backgroundColor: "#FFFFFF",
-    borderColor: "#DCEFE0",
+    backgroundColor: "transparent",
+    borderColor: colors.text,
     borderRadius: 10,
     borderWidth: 1,
     flexDirection: "row",
     minHeight: 96,
     paddingHorizontal: 22,
-    paddingVertical: 14,
-    shadowColor: "#000000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.12,
-    shadowRadius: 20
+    paddingVertical: 14
   },
   loadingLogoIcon: {
     height: 68,
@@ -7377,7 +7375,7 @@ function createStyles(colors: typeof lightColors) {
     width: 68
   },
   loadingLogoLetters: {
-    color: colors.black,
+    color: colors.text,
     fontSize: 42,
     fontWeight: "700",
     letterSpacing: 0,
