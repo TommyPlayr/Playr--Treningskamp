@@ -790,7 +790,7 @@ export default function App() {
   useEffect(() => {
     const timer = setTimeout(() => {
       setMinimumLoadingDone(true);
-    }, 2200);
+    }, 2300);
 
     return () => clearTimeout(timer);
   }, []);
@@ -4612,37 +4612,54 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
 }
 
 function PlayrLoadingScreen() {
-  const fade = useRef(new Animated.Value(0.72)).current;
-  const scale = useRef(new Animated.Value(0.86)).current;
-  const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
+  const logoScale = useRef(new Animated.Value(0.82)).current;
+  const lettersOpacity = useRef(new Animated.Value(0)).current;
+  const lettersShift = useRef(new Animated.Value(-10)).current;
+  const markSource = playrMarkBlackGreen;
 
   useEffect(() => {
     const animation = Animated.parallel([
-      Animated.timing(fade, {
+      Animated.timing(logoScale, {
         toValue: 1,
         duration: 2200,
         useNativeDriver: true
       }),
-      Animated.timing(scale, {
-        toValue: 1,
-        duration: 2200,
-        useNativeDriver: true
-      })
+      Animated.sequence([
+        Animated.delay(320),
+        Animated.parallel([
+          Animated.timing(lettersOpacity, {
+            toValue: 1,
+            duration: 1380,
+            useNativeDriver: true
+          }),
+          Animated.timing(lettersShift, {
+            toValue: 0,
+            duration: 1380,
+            useNativeDriver: true
+          })
+        ])
+      ])
     ]);
 
     animation.start();
 
     return () => animation.stop();
-  }, [fade, scale]);
+  }, [lettersOpacity, lettersShift, logoScale]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.loadingScreen}>
-        <Animated.Image
-          source={markSource}
-          style={[styles.loadingLogoIcon, { opacity: fade, transform: [{ scale }] }]}
-        />
-        <Text style={styles.loadingLogoText}>Playr</Text>
+        <Animated.View style={[styles.loadingLogoCard, { transform: [{ scale: logoScale }] }]}>
+          <Image source={markSource} style={styles.loadingLogoIcon} />
+          <Animated.Text
+            style={[
+              styles.loadingLogoLetters,
+              { opacity: lettersOpacity, transform: [{ translateX: lettersShift }] }
+            ]}
+          >
+            layr
+          </Animated.Text>
+        </Animated.View>
       </View>
     </SafeAreaView>
   );
@@ -7337,19 +7354,35 @@ function createStyles(colors: typeof lightColors) {
     alignItems: "center",
     backgroundColor: colors.background,
     flex: 1,
-    gap: 12,
     justifyContent: "center"
   },
-  loadingLogoIcon: {
-    height: 96,
-    resizeMode: "contain",
-    width: 96
+  loadingLogoCard: {
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderColor: "#DCEFE0",
+    borderRadius: 10,
+    borderWidth: 1,
+    flexDirection: "row",
+    minHeight: 96,
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20
   },
-  loadingLogoText: {
+  loadingLogoIcon: {
+    height: 68,
+    resizeMode: "contain",
+    width: 68
+  },
+  loadingLogoLetters: {
     color: colors.black,
     fontSize: 42,
     fontWeight: "700",
-    textAlign: "center"
+    letterSpacing: 0,
+    lineHeight: 50,
+    marginLeft: 2
   },
   loadingText: {
     color: colors.greenDark,
