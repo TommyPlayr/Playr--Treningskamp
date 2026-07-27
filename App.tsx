@@ -32,7 +32,6 @@ import {
 } from "@expo-google-fonts/open-sans";
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Picker } from "@react-native-picker/picker";
 import * as Notifications from "expo-notifications";
 import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import { isSupabaseConfigured, supabase } from "./lib/supabase";
@@ -6492,23 +6491,57 @@ function DateTimeDropdown({
   options: { label: string; value: string }[];
   onChange: (value: string) => void;
 }) {
+  const [isOpen, setIsOpen] = useState(false);
+  const selectedOption = options.find((option) => option.value === value);
+  const displayValue = selectedOption?.label ?? value;
+
   return (
     <View>
       <Text style={styles.inputLabel}>{label}</Text>
-      <View style={styles.pickerField}>
-        <Picker
-          selectedValue={value}
-          onValueChange={(nextValue) => onChange(String(nextValue))}
-          style={styles.formPicker}
-          itemStyle={styles.formPickerItem}
-          dropdownIconColor={colors.text}
-        >
-          <Picker.Item label={placeholder} value="" />
-          {options.map((option) => (
-            <Picker.Item key={option.value} label={option.label} value={option.value} />
-          ))}
-        </Picker>
-      </View>
+      <Pressable style={styles.dateTimeSelectField} onPress={() => setIsOpen(true)}>
+        <Text style={[styles.dateTimeSelectText, !value && styles.dateTimeSelectPlaceholder]}>
+          {value ? displayValue : placeholder}
+        </Text>
+        <Ionicons name="chevron-down" size={18} color={colors.greenDark} />
+      </Pressable>
+
+      <Modal transparent visible={isOpen} animationType="fade" onRequestClose={() => setIsOpen(false)}>
+        <View style={styles.dateTimeSheetBackdrop}>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setIsOpen(false)} />
+          <View style={styles.dateTimeSheet}>
+            <View style={styles.dateTimeSheetHeader}>
+              <Text style={styles.dateTimeSheetTitle}>{label}</Text>
+              <Pressable style={styles.dateTimeSheetClose} onPress={() => setIsOpen(false)}>
+                <Ionicons name="close" size={20} color={colors.text} />
+              </Pressable>
+            </View>
+            <FlatList
+              data={[{ label: placeholder, value: "" }, ...options]}
+              keyExtractor={(option) => `${label}-${option.value || "empty"}`}
+              style={styles.dateTimeOptionList}
+              renderItem={({ item }) => {
+                const isSelected = item.value === value;
+                return (
+                  <Pressable
+                    style={[styles.dateTimeOption, isSelected && styles.dateTimeOptionSelected]}
+                    onPress={() => {
+                      onChange(item.value);
+                      setIsOpen(false);
+                    }}
+                  >
+                    <Text
+                      style={[styles.dateTimeOptionText, isSelected && styles.dateTimeOptionTextSelected]}
+                    >
+                      {item.label}
+                    </Text>
+                    {isSelected ? <Ionicons name="checkmark" size={18} color={colors.greenDark} /> : null}
+                  </Pressable>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -8827,6 +8860,83 @@ function createStyles(colors: typeof lightColors) {
     borderRadius: 8,
     borderWidth: 1,
     overflow: "hidden"
+  },
+  dateTimeSelectField: {
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderRadius: 8,
+    borderWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 50,
+    paddingHorizontal: 14
+  },
+  dateTimeSelectText: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 16,
+    fontWeight: "700"
+  },
+  dateTimeSelectPlaceholder: {
+    color: colors.muted
+  },
+  dateTimeSheetBackdrop: {
+    backgroundColor: "rgba(0, 0, 0, 0.3)",
+    flex: 1,
+    justifyContent: "flex-end"
+  },
+  dateTimeSheet: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+    maxHeight: "58%",
+    paddingBottom: 20
+  },
+  dateTimeSheetHeader: {
+    alignItems: "center",
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12
+  },
+  dateTimeSheetTitle: {
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: "900"
+  },
+  dateTimeSheetClose: {
+    alignItems: "center",
+    height: 34,
+    justifyContent: "center",
+    width: 34
+  },
+  dateTimeOptionList: {
+    maxHeight: 360
+  },
+  dateTimeOption: {
+    alignItems: "center",
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    minHeight: 46,
+    paddingHorizontal: 16
+  },
+  dateTimeOptionSelected: {
+    backgroundColor: colors.cardSoft
+  },
+  dateTimeOptionText: {
+    color: colors.text,
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "700"
+  },
+  dateTimeOptionTextSelected: {
+    color: colors.greenDark,
+    fontWeight: "900"
   },
   phoneVerificationBox: {
     backgroundColor: colors.cardSoft,
