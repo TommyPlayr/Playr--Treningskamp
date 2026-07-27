@@ -7364,7 +7364,7 @@ function createStyles(colors: typeof lightColors) {
     fontWeight: "700",
     letterSpacing: 0,
     lineHeight: 50,
-    marginLeft: 2
+    marginLeft: 0
   },
   loadingText: {
     color: colors.greenDark,
