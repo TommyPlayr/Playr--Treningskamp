@@ -4616,7 +4616,7 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
 function PlayrLoadingScreen() {
   const lettersOpacity = useRef(new Animated.Value(0)).current;
   const [lettersVisible, setLettersVisible] = useState(false);
-  const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
+  const markSource = playrMarkWhiteGreen;
 
   useEffect(() => {
     const animation = Animated.sequence([
@@ -4639,21 +4639,19 @@ function PlayrLoadingScreen() {
   }, [lettersOpacity]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.loadingScreen}>
-        <View style={styles.loadingLogoCard}>
-          <Image fadeDuration={0} source={markSource} style={styles.loadingLogoIcon} />
-          <Animated.Text
-            style={[
-              styles.loadingLogoLetters,
-              { opacity: lettersVisible ? 1 : lettersOpacity }
-            ]}
-          >
-            layr
-          </Animated.Text>
-        </View>
+    <View style={styles.loadingScreen}>
+      <View style={styles.loadingLogoCard}>
+        <Image fadeDuration={0} source={markSource} style={styles.loadingLogoIcon} />
+        <Animated.Text
+          style={[
+            styles.loadingLogoLetters,
+            { opacity: lettersVisible ? 1 : lettersOpacity }
+          ]}
+        >
+          layr
+        </Animated.Text>
       </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -7344,7 +7342,7 @@ function createStyles(colors: typeof lightColors) {
   },
   loadingScreen: {
     alignItems: "center",
-    backgroundColor: colors.background,
+    backgroundColor: "#07110B",
     flex: 1,
     justifyContent: "center"
   },
@@ -7365,7 +7363,7 @@ function createStyles(colors: typeof lightColors) {
     width: 68
   },
   loadingLogoLetters: {
-    color: colors.text,
+    color: "#FFFFFF",
     fontSize: 42,
     fontWeight: "700",
     letterSpacing: 0,
