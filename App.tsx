@@ -7811,7 +7811,7 @@ function createStyles(colors: typeof lightColors) {
     flexGrow: 1,
     paddingBottom: 28,
     paddingHorizontal: 28,
-    paddingTop: 20,
+    paddingTop: 30,
     justifyContent: "flex-start",
     overflow: "hidden",
     position: "relative"
@@ -7940,30 +7940,30 @@ function createStyles(colors: typeof lightColors) {
     alignSelf: "center",
     backgroundColor: "transparent",
     flexDirection: "row",
-    marginBottom: 26,
-    marginTop: 26,
-    minHeight: 64,
+    marginBottom: 34,
+    marginTop: 34,
+    minHeight: 96,
     paddingHorizontal: 0,
     paddingVertical: 0
   },
   homeBrandIcon: {
-    height: 56,
+    height: 84,
     resizeMode: "contain",
-    width: 56
+    width: 84
   },
   homeBrandLetters: {
     color: "#FFFFFF",
-    fontSize: 36,
+    fontSize: 54,
     fontWeight: "700",
     letterSpacing: 0,
-    lineHeight: 42,
-    marginLeft: -5
+    lineHeight: 63,
+    marginLeft: -8
   },
   featuredArea: {
-    marginTop: 96
+    marginTop: 0
   },
   featuredAreaWithNotification: {
-    marginTop: 44
+    marginTop: 0
   },
   featuredCard: {
     backgroundColor: colors.card,
@@ -8081,7 +8081,7 @@ function createStyles(colors: typeof lightColors) {
     borderRadius: 8,
     borderWidth: 1,
     gap: 5,
-    marginTop: 44,
+    marginTop: 0,
     maxWidth: 285,
     paddingHorizontal: 9,
     paddingVertical: 6,
