@@ -3111,7 +3111,7 @@ function PlayrApp({
   }
 
   if (isSupabaseConfigured && !authReady) {
-    return <PlayrLoadingScreen />;
+    return <PlayrLoadingScreen lettersInitiallyVisible />;
   }
 
   if (passwordResetVisible) {
@@ -3123,7 +3123,7 @@ function PlayrApp({
   }
 
   if (isSupabaseConfigured && !profileReady) {
-    return <PlayrLoadingScreen />;
+    return <PlayrLoadingScreen lettersInitiallyVisible />;
   }
 
   if (isSupabaseConfigured && authUserId && userEmail && !hasTeamProfile) {
@@ -4613,12 +4613,18 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
   );
 }
 
-function PlayrLoadingScreen() {
-  const lettersOpacity = useRef(new Animated.Value(0)).current;
-  const [lettersVisible, setLettersVisible] = useState(false);
+function PlayrLoadingScreen({ lettersInitiallyVisible = false }: { lettersInitiallyVisible?: boolean }) {
+  const lettersOpacity = useRef(new Animated.Value(lettersInitiallyVisible ? 1 : 0)).current;
+  const [lettersVisible, setLettersVisible] = useState(lettersInitiallyVisible);
   const markSource = playrMarkWhiteGreen;
 
   useEffect(() => {
+    if (lettersInitiallyVisible) {
+      lettersOpacity.setValue(1);
+      setLettersVisible(true);
+      return;
+    }
+
     const animation = Animated.sequence([
       Animated.delay(280),
       Animated.timing(lettersOpacity, {
@@ -4636,7 +4642,7 @@ function PlayrLoadingScreen() {
     });
 
     return () => animation.stop();
-  }, [lettersOpacity]);
+  }, [lettersInitiallyVisible, lettersOpacity]);
 
   return (
     <View style={styles.loadingScreen}>
@@ -5600,11 +5606,12 @@ function CreateMatchModal({
   const showLevelInput = shouldShowLevelInput(form.ageGroup || profile.ageGroup);
   const dateOptions = getDateDropdownOptions(form.date);
   const timeOptions = getTimeDropdownOptions(form.time);
-  const scrollRef = useRef<ScrollView>(null);
-  const scrollToComment = () => {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    });
+  const createMatchScrollRef = useRef<ScrollView>(null);
+  const scrollToCreateMatchComment = () => {
+    const delay = Platform.OS === "android" ? 320 : 140;
+    setTimeout(() => {
+      createMatchScrollRef.current?.scrollToEnd({ animated: true });
+    }, delay);
   };
 
   return (
@@ -5619,7 +5626,7 @@ function CreateMatchModal({
           </ModalHeaderView>
 
           <ScrollView
-            ref={scrollRef}
+            ref={createMatchScrollRef}
             style={styles.modalScroll}
             contentContainerStyle={styles.form}
             keyboardDismissMode="on-drag"
@@ -5665,7 +5672,7 @@ function CreateMatchModal({
               onChangeText={(comment) => onChange({ ...form, comment })}
               placeholder="Eks: Ønsker jevn motstand"
               multiline
-              onFocus={scrollToComment}
+              onFocus={scrollToCreateMatchComment}
             />
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
@@ -5703,17 +5710,19 @@ function EditMatchModal({
   onClose: () => void;
   onSubmit: () => void;
 }) {
+  const editMatchScrollRef = useRef<ScrollView>(null);
+  const scrollToEditMatchComment = () => {
+    const delay = Platform.OS === "android" ? 320 : 140;
+    setTimeout(() => {
+      editMatchScrollRef.current?.scrollToEnd({ animated: true });
+    }, delay);
+  };
+
   if (!match) {
     return null;
   }
   const dateOptions = getDateDropdownOptions(form.date);
   const timeOptions = getTimeDropdownOptions(form.time);
-  const scrollRef = useRef<ScrollView>(null);
-  const scrollToComment = () => {
-    requestAnimationFrame(() => {
-      scrollRef.current?.scrollToEnd({ animated: true });
-    });
-  };
 
   return (
       <SafeAreaView style={[styles.modalSafe, styles.topModalOverlay]}>
@@ -5726,7 +5735,7 @@ function EditMatchModal({
           </ModalHeaderView>
 
           <ScrollView
-            ref={scrollRef}
+            ref={editMatchScrollRef}
             style={styles.modalScroll}
             contentContainerStyle={styles.form}
             keyboardDismissMode="on-drag"
@@ -5769,7 +5778,7 @@ function EditMatchModal({
               onChangeText={(comment) => onChange({ ...form, comment })}
               placeholder="Eks: Ønsker jevn motstand"
               multiline
-              onFocus={scrollToComment}
+              onFocus={scrollToEditMatchComment}
             />
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
@@ -7572,15 +7581,15 @@ function createStyles(colors: typeof lightColors) {
   header: {
     backgroundColor: colors.green,
     paddingHorizontal: 22,
-    minHeight: Platform.OS === "android" ? 110 : 84,
+    minHeight: Platform.OS === "android" ? 118 : 92,
     justifyContent: "center",
     overflow: "visible",
     paddingBottom: 0,
-    paddingTop: Platform.OS === "android" ? 22 : 0,
+    paddingTop: Platform.OS === "android" ? 26 : 0,
     zIndex: 10
   },
   headerHome: {
-    minHeight: Platform.OS === "android" ? 128 : 102
+    minHeight: Platform.OS === "android" ? 138 : 112
   },
   headerPatternArc: {
     borderColor: "rgba(255, 255, 255, 0.14)",
@@ -7659,7 +7668,7 @@ function createStyles(colors: typeof lightColors) {
     minHeight: 76,
     position: "absolute",
     right: 22,
-    top: Platform.OS === "android" ? 30 : 8,
+    top: Platform.OS === "android" ? 34 : 10,
     zIndex: 80
   },
   headerGreetingWrap: {
@@ -8695,7 +8704,7 @@ function createStyles(colors: typeof lightColors) {
   form: {
     gap: 14,
     padding: 18,
-    paddingBottom: 36
+    paddingBottom: Platform.OS === "android" ? 260 : 72
   },
   inputLabel: {
     color: colors.text,
@@ -8862,7 +8871,8 @@ function createStyles(colors: typeof lightColors) {
     marginTop: 4
   },
   textArea: {
-    minHeight: 96,
+    minHeight: 112,
+    paddingBottom: 14,
     paddingTop: 14,
     textAlignVertical: "top"
   },
