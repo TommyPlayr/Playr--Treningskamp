@@ -4509,7 +4509,6 @@ function AppFeedbackModal({
           </ModalHeaderView>
 
           <ScrollView
-            ref={scrollRef}
             style={styles.modalScroll}
             contentContainerStyle={styles.details}
             keyboardDismissMode="on-drag"
@@ -5727,6 +5726,7 @@ function EditMatchModal({
           </ModalHeaderView>
 
           <ScrollView
+            ref={scrollRef}
             style={styles.modalScroll}
             contentContainerStyle={styles.form}
             keyboardDismissMode="on-drag"
