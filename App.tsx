@@ -4581,6 +4581,16 @@ function PlayrLogo({ compact = false }: { compact?: boolean }) {
     </View>
   );
 }
+function PlayrWordmark({ large = false }: { large?: boolean }) {
+  const markSource = nativeThemeMode === "dark" ? playrMarkWhiteGreen : playrMarkBlackGreen;
+
+  return (
+    <View style={[styles.playrWordmark, large && styles.playrWordmarkLarge]}>
+      <Image source={markSource} style={[styles.playrWordmarkIcon, large && styles.playrWordmarkIconLarge]} />
+      <Text style={[styles.playrWordmarkText, large && styles.playrWordmarkTextLarge]}>layr</Text>
+    </View>
+  );
+}
 
 function PlayrVision() {
   return (
@@ -4766,7 +4776,6 @@ function HomeScreen({
       scrollEventThrottle={16}
     >
       <PlayrPattern />
-      <PlayrLogo />
       <Text style={styles.heroTitle}>Markedsplassen der neste kamp starter.</Text>
       <Text style={styles.heroText}>
         En enklere hverdag for trenere.
@@ -4781,6 +4790,10 @@ function HomeScreen({
           <Ionicons name="add-circle-outline" size={20} color={colors.greenDark} />
           <Text style={styles.secondaryButtonText}>Legg ut kamp</Text>
         </Pressable>
+      </View>
+
+      <View style={styles.homeWordmarkSlot}>
+        <PlayrWordmark large />
       </View>
 
       {pendingIncomingCount > 0 || approvedMyRequestsCount > 0 || chatMessageCount > 0 || matchingMatchCount > 0 ? (
@@ -7589,7 +7602,7 @@ function createStyles(colors: typeof lightColors) {
     zIndex: 10
   },
   headerHome: {
-    minHeight: Platform.OS === "android" ? 138 : 112
+    minHeight: Platform.OS === "android" ? 128 : 104
   },
   headerPatternArc: {
     borderColor: "rgba(255, 255, 255, 0.14)",
@@ -7881,6 +7894,35 @@ function createStyles(colors: typeof lightColors) {
   logoCompact: {
     fontSize: 24
   },
+  playrWordmark: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "center"
+  },
+  playrWordmarkLarge: {
+    transform: [{ scale: 1.5 }]
+  },
+  playrWordmarkIcon: {
+    height: 54,
+    resizeMode: "contain",
+    width: 54
+  },
+  playrWordmarkIconLarge: {
+    height: 60,
+    width: 60
+  },
+  playrWordmarkText: {
+    color: colors.text,
+    fontSize: 42,
+    fontWeight: "700",
+    letterSpacing: 0,
+    lineHeight: 50,
+    marginLeft: -6
+  },
+  playrWordmarkTextLarge: {
+    fontSize: 46,
+    lineHeight: 54
+  },
   heroTitle: {
     color: colors.greenDark,
     fontSize: 17,
@@ -7904,8 +7946,15 @@ function createStyles(colors: typeof lightColors) {
     justifyContent: "center",
     marginTop: 34
   },
+  homeWordmarkSlot: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 52,
+    marginTop: 58,
+    minHeight: 86
+  },
   featuredArea: {
-    marginTop: 96
+    marginTop: 0
   },
   featuredAreaWithNotification: {
     marginTop: 44
