@@ -771,7 +771,6 @@ export default function App() {
   const [startupError, setStartupError] = useState<string | null>(null);
   const [themeMode, setThemeMode] = useState<ThemeMode>(readThemeMode);
   const [minimumLoadingDone, setMinimumLoadingDone] = useState(false);
-  const [showLoadingOverlay, setShowLoadingOverlay] = useState(true);
   const [fontsLoaded] = useFonts({
     OpenSans_400Regular,
     OpenSans_600SemiBold
@@ -779,7 +778,6 @@ export default function App() {
   openSansReady = fontsLoaded;
   colors = themeMode === "dark" ? darkColors : lightColors;
   styles = createStyles(colors);
-  const appReady = fontsLoaded && minimumLoadingDone;
 
   const toggleThemeMode = useCallback(() => {
     setThemeMode((current) => {
@@ -795,16 +793,6 @@ export default function App() {
     }, 3000);
 
     return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    if (!appReady) {
-      setShowLoadingOverlay(true);
-    }
-  }, [appReady]);
-
-  const handleLoadingExitComplete = useCallback(() => {
-    setShowLoadingOverlay(false);
   }, []);
 
   useEffect(() => {
@@ -836,21 +824,17 @@ export default function App() {
     );
   }
 
+  if (!fontsLoaded || !minimumLoadingDone) {
+    return <PlayrLoadingScreen />;
+  }
+
   return (
     <View style={styles.app}>
-      {appReady ? (
-        <SafeAreaProvider>
-          <StartupErrorBoundary>
-            <PlayrApp themeMode={themeMode} onToggleTheme={toggleThemeMode} />
-          </StartupErrorBoundary>
-        </SafeAreaProvider>
-      ) : null}
-      {showLoadingOverlay ? (
-        <PlayrLoadingScreen
-          exiting={appReady}
-          onExitComplete={handleLoadingExitComplete}
-        />
-      ) : null}
+      <SafeAreaProvider>
+        <StartupErrorBoundary>
+          <PlayrApp themeMode={themeMode} onToggleTheme={toggleThemeMode} />
+        </StartupErrorBoundary>
+      </SafeAreaProvider>
     </View>
   );
 }
@@ -4525,6 +4509,7 @@ function AppFeedbackModal({
           </ModalHeaderView>
 
           <ScrollView
+            ref={scrollRef}
             style={styles.modalScroll}
             contentContainerStyle={styles.details}
             keyboardDismissMode="on-drag"
@@ -4629,15 +4614,8 @@ function PlayrPattern({ variant = "home" }: { variant?: "home" | "auth" }) {
   );
 }
 
-function PlayrLoadingScreen({
-  exiting = false,
-  onExitComplete
-}: {
-  exiting?: boolean;
-  onExitComplete?: () => void;
-}) {
+function PlayrLoadingScreen() {
   const lettersOpacity = useRef(new Animated.Value(0)).current;
-  const screenOpacity = useRef(new Animated.Value(1)).current;
   const [lettersVisible, setLettersVisible] = useState(false);
   const markSource = playrMarkWhiteGreen;
 
@@ -4661,36 +4639,8 @@ function PlayrLoadingScreen({
     return () => animation.stop();
   }, [lettersOpacity]);
 
-  useEffect(() => {
-    if (!exiting) {
-      screenOpacity.setValue(1);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      Animated.timing(screenOpacity, {
-        toValue: 0,
-        duration: 420,
-        useNativeDriver: true
-      }).start(({ finished }) => {
-        if (finished) {
-          onExitComplete?.();
-        }
-      });
-    }, 180);
-
-    return () => clearTimeout(timer);
-  }, [exiting, onExitComplete, screenOpacity]);
-
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.loadingScreen,
-        exiting && styles.loadingScreenOverlay,
-        { opacity: screenOpacity }
-      ]}
-    >
+    <View style={styles.loadingScreen}>
       <View style={styles.loadingLogoCard}>
         <Image fadeDuration={0} source={markSource} style={styles.loadingLogoIcon} />
         <Animated.Text
@@ -4702,7 +4652,7 @@ function PlayrLoadingScreen({
           layr
         </Animated.Text>
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -4811,6 +4761,7 @@ function HomeScreen({
       scrollEventThrottle={16}
     >
       <PlayrPattern />
+      <PlayrLogo />
       <Text style={styles.heroTitle}>Markedsplassen der neste kamp starter.</Text>
       <Text style={styles.heroText}>
         En enklere hverdag for trenere.
@@ -4825,11 +4776,6 @@ function HomeScreen({
           <Ionicons name="add-circle-outline" size={20} color={colors.greenDark} />
           <Text style={styles.secondaryButtonText}>Legg ut kamp</Text>
         </Pressable>
-      </View>
-
-      <View style={styles.homeBrandCard}>
-        <Image fadeDuration={0} source={playrMarkWhiteGreen} style={styles.homeBrandIcon} />
-        <Text style={styles.homeBrandLetters}>layr</Text>
       </View>
 
       {pendingIncomingCount > 0 || approvedMyRequestsCount > 0 || chatMessageCount > 0 || matchingMatchCount > 0 ? (
@@ -5655,6 +5601,12 @@ function CreateMatchModal({
   const showLevelInput = shouldShowLevelInput(form.ageGroup || profile.ageGroup);
   const dateOptions = getDateDropdownOptions(form.date);
   const timeOptions = getTimeDropdownOptions(form.time);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollToComment = () => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+  };
 
   return (
     <Modal visible={visible} animationType="none" presentationStyle="fullScreen" onRequestClose={onClose}>
@@ -5668,6 +5620,7 @@ function CreateMatchModal({
           </ModalHeaderView>
 
           <ScrollView
+            ref={scrollRef}
             style={styles.modalScroll}
             contentContainerStyle={styles.form}
             keyboardDismissMode="on-drag"
@@ -5713,6 +5666,7 @@ function CreateMatchModal({
               onChangeText={(comment) => onChange({ ...form, comment })}
               placeholder="Eks: Ønsker jevn motstand"
               multiline
+              onFocus={scrollToComment}
             />
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
@@ -5755,6 +5709,12 @@ function EditMatchModal({
   }
   const dateOptions = getDateDropdownOptions(form.date);
   const timeOptions = getTimeDropdownOptions(form.time);
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollToComment = () => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+  };
 
   return (
       <SafeAreaView style={[styles.modalSafe, styles.topModalOverlay]}>
@@ -5809,6 +5769,7 @@ function EditMatchModal({
               onChangeText={(comment) => onChange({ ...form, comment })}
               placeholder="Eks: Ønsker jevn motstand"
               multiline
+              onFocus={scrollToComment}
             />
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
@@ -6458,7 +6419,8 @@ function Input({
   textContentType,
   autoComplete,
   returnKeyType,
-  onSubmitEditing
+  onSubmitEditing,
+  onFocus
 }: {
   label: string;
   value: string;
@@ -6473,6 +6435,7 @@ function Input({
   autoComplete?: any;
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
   onSubmitEditing?: () => void;
+  onFocus?: () => void;
 }) {
   return (
     <View>
@@ -6492,6 +6455,7 @@ function Input({
         autoComplete={autoComplete}
         returnKeyType={returnKeyType}
         onSubmitEditing={onSubmitEditing}
+        onFocus={onFocus}
       />
     </View>
   );
@@ -7401,10 +7365,6 @@ function createStyles(colors: typeof lightColors) {
     flex: 1,
     justifyContent: "center"
   },
-  loadingScreenOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 1000
-  },
   loadingLogoCard: {
     alignItems: "center",
     backgroundColor: "transparent",
@@ -7612,15 +7572,15 @@ function createStyles(colors: typeof lightColors) {
   header: {
     backgroundColor: colors.green,
     paddingHorizontal: 22,
-    minHeight: Platform.OS === "android" ? 118 : 92,
+    minHeight: Platform.OS === "android" ? 110 : 84,
     justifyContent: "center",
     overflow: "visible",
     paddingBottom: 0,
-    paddingTop: Platform.OS === "android" ? 26 : 0,
+    paddingTop: Platform.OS === "android" ? 22 : 0,
     zIndex: 10
   },
   headerHome: {
-    minHeight: Platform.OS === "android" ? 138 : 112
+    minHeight: Platform.OS === "android" ? 128 : 102
   },
   headerPatternArc: {
     borderColor: "rgba(255, 255, 255, 0.14)",
@@ -7699,7 +7659,7 @@ function createStyles(colors: typeof lightColors) {
     minHeight: 76,
     position: "absolute",
     right: 22,
-    top: Platform.OS === "android" ? 34 : 10,
+    top: Platform.OS === "android" ? 30 : 8,
     zIndex: 80
   },
   headerGreetingWrap: {
@@ -7811,7 +7771,7 @@ function createStyles(colors: typeof lightColors) {
     flexGrow: 1,
     paddingBottom: 28,
     paddingHorizontal: 28,
-    paddingTop: 30,
+    paddingTop: 20,
     justifyContent: "flex-start",
     overflow: "hidden",
     position: "relative"
@@ -7935,35 +7895,11 @@ function createStyles(colors: typeof lightColors) {
     justifyContent: "center",
     marginTop: 34
   },
-  homeBrandCard: {
-    alignItems: "center",
-    alignSelf: "center",
-    backgroundColor: "transparent",
-    flexDirection: "row",
-    marginBottom: 34,
-    marginTop: 34,
-    minHeight: 96,
-    paddingHorizontal: 0,
-    paddingVertical: 0
-  },
-  homeBrandIcon: {
-    height: 84,
-    resizeMode: "contain",
-    width: 84
-  },
-  homeBrandLetters: {
-    color: "#FFFFFF",
-    fontSize: 54,
-    fontWeight: "700",
-    letterSpacing: 0,
-    lineHeight: 63,
-    marginLeft: -8
-  },
   featuredArea: {
-    marginTop: 0
+    marginTop: 96
   },
   featuredAreaWithNotification: {
-    marginTop: 0
+    marginTop: 44
   },
   featuredCard: {
     backgroundColor: colors.card,
@@ -8081,7 +8017,7 @@ function createStyles(colors: typeof lightColors) {
     borderRadius: 8,
     borderWidth: 1,
     gap: 5,
-    marginTop: 0,
+    marginTop: 44,
     maxWidth: 285,
     paddingHorizontal: 9,
     paddingVertical: 6,
