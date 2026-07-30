@@ -5622,14 +5622,11 @@ function CreateMatchModal({
   const dateOptions = getDateDropdownOptions(form.date);
   const timeOptions = getTimeDropdownOptions(form.time);
   const createMatchScrollRef = useRef<ScrollView>(null);
-  const [createMatchCommentY, setCreateMatchCommentY] = useState(0);
   const scrollToCreateMatchComment = () => {
     const delay = Platform.OS === "android" ? 320 : 140;
     setTimeout(() => {
-      const fallbackY = Platform.OS === "android" ? 430 : 340;
-      const offset = Platform.OS === "android" ? 190 : 150;
       createMatchScrollRef.current?.scrollTo({
-        y: Math.max((createMatchCommentY || fallbackY) - offset, 0),
+        y: Platform.OS === "android" ? 430 : 340,
         animated: true
       });
     }, delay);
@@ -5687,7 +5684,6 @@ function CreateMatchModal({
               }
             />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
-            <View onLayout={(event) => setCreateMatchCommentY(event.nativeEvent.layout.y)}>
             <Input
               label="Kommentar"
               value={form.comment}
@@ -5696,7 +5692,6 @@ function CreateMatchModal({
               multiline
               onFocus={scrollToCreateMatchComment}
             />
-            </View>
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
@@ -5734,14 +5729,11 @@ function EditMatchModal({
   onSubmit: () => void;
 }) {
   const editMatchScrollRef = useRef<ScrollView>(null);
-  const [editMatchCommentY, setEditMatchCommentY] = useState(0);
   const scrollToEditMatchComment = () => {
     const delay = Platform.OS === "android" ? 320 : 140;
     setTimeout(() => {
-      const fallbackY = Platform.OS === "android" ? 430 : 340;
-      const offset = Platform.OS === "android" ? 190 : 150;
       editMatchScrollRef.current?.scrollTo({
-        y: Math.max((editMatchCommentY || fallbackY) - offset, 0),
+        y: Platform.OS === "android" ? 430 : 340,
         animated: true
       });
     }, delay);
@@ -5801,7 +5793,6 @@ function EditMatchModal({
               }
             />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
-            <View onLayout={(event) => setEditMatchCommentY(event.nativeEvent.layout.y)}>
             <Input
               label="Kommentar"
               value={form.comment}
@@ -5810,7 +5801,6 @@ function EditMatchModal({
               multiline
               onFocus={scrollToEditMatchComment}
             />
-            </View>
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
