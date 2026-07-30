@@ -3644,7 +3644,6 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
               secureTextEntry
               returnKeyType="done"
             />
-            </View>
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
