@@ -7,6 +7,7 @@ import {
   AppState,
   FlatList,
   Image,
+  Keyboard,
   KeyboardAvoidingView,
   Linking,
   Modal,
@@ -22,6 +23,7 @@ import {
   TouchableOpacity,
   type TextInputProps,
   type TextProps,
+  useWindowDimensions,
   View
 } from "react-native";
 import {
@@ -96,6 +98,26 @@ function TextInput({ style, ...props }: TextInputProps) {
       style={[style, { fontFamily: getOpenSansFamily(style), fontWeight: "normal" }]}
     />
   );
+}
+
+function useKeyboardHeight() {
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", (event) => {
+      setKeyboardHeight(event.endCoordinates.height);
+    });
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => {
+      setKeyboardHeight(0);
+    });
+
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  return keyboardHeight;
 }
 
 type Sport = "Fotball" | "Handball";
@@ -4793,7 +4815,7 @@ function HomeScreen({
       <View style={styles.homeWordmarkSlot}>
         <PlayrWordmark large />
         <Text style={styles.homeWordmarkTagline}>
-          Mer tid til aktivitet.Mindre tid til administrasjon
+          Mer tid til aktivitet. Mindre tid på administrasjon.
         </Text>
       </View>
 
@@ -5621,11 +5643,21 @@ function CreateMatchModal({
   const dateOptions = getDateDropdownOptions(form.date);
   const timeOptions = getTimeDropdownOptions(form.time);
   const createMatchScrollRef = useRef<ScrollView>(null);
+  const { height: createMatchWindowHeight } = useWindowDimensions();
+  const createMatchKeyboardHeight = useKeyboardHeight();
+  const [createMatchCommentY, setCreateMatchCommentY] = useState(0);
   const scrollToCreateMatchComment = () => {
     const delay = Platform.OS === "android" ? 320 : 140;
     setTimeout(() => {
+      const estimatedKeyboardHeight =
+        Platform.OS === "android" ? Math.max(createMatchWindowHeight * 0.38, 280) : 300;
+      const activeKeyboardHeight = Math.max(createMatchKeyboardHeight, estimatedKeyboardHeight);
+      const availableHeight = Math.max(createMatchWindowHeight - activeKeyboardHeight - 120, 240);
+      const preferredTop = Math.max(availableHeight - 130, 110);
+      const targetY = Math.max(createMatchCommentY - preferredTop, 0);
+
       createMatchScrollRef.current?.scrollTo({
-        y: Platform.OS === "android" ? 430 : 340,
+        y: targetY,
         animated: true
       });
     }, delay);
@@ -5683,7 +5715,8 @@ function CreateMatchModal({
               }
             />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
-            <Input
+            <View onLayout={(event) => setCreateMatchCommentY(event.nativeEvent.layout.y)}>
+              <Input
               label="Kommentar"
               value={form.comment}
               onChangeText={(comment) => onChange({ ...form, comment })}
@@ -5691,6 +5724,7 @@ function CreateMatchModal({
               multiline
               onFocus={scrollToCreateMatchComment}
             />
+            </View>
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
@@ -5728,11 +5762,21 @@ function EditMatchModal({
   onSubmit: () => void;
 }) {
   const editMatchScrollRef = useRef<ScrollView>(null);
+  const { height: editMatchWindowHeight } = useWindowDimensions();
+  const editMatchKeyboardHeight = useKeyboardHeight();
+  const [editMatchCommentY, setEditMatchCommentY] = useState(0);
   const scrollToEditMatchComment = () => {
     const delay = Platform.OS === "android" ? 320 : 140;
     setTimeout(() => {
+      const estimatedKeyboardHeight =
+        Platform.OS === "android" ? Math.max(editMatchWindowHeight * 0.38, 280) : 300;
+      const activeKeyboardHeight = Math.max(editMatchKeyboardHeight, estimatedKeyboardHeight);
+      const availableHeight = Math.max(editMatchWindowHeight - activeKeyboardHeight - 120, 240);
+      const preferredTop = Math.max(availableHeight - 130, 110);
+      const targetY = Math.max(editMatchCommentY - preferredTop, 0);
+
       editMatchScrollRef.current?.scrollTo({
-        y: Platform.OS === "android" ? 430 : 340,
+        y: targetY,
         animated: true
       });
     }, delay);
@@ -5792,7 +5836,8 @@ function EditMatchModal({
               }
             />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
-            <Input
+            <View onLayout={(event) => setEditMatchCommentY(event.nativeEvent.layout.y)}>
+              <Input
               label="Kommentar"
               value={form.comment}
               onChangeText={(comment) => onChange({ ...form, comment })}
@@ -5800,6 +5845,7 @@ function EditMatchModal({
               multiline
               onFocus={scrollToEditMatchComment}
             />
+            </View>
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
