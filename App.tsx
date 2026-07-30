@@ -3509,7 +3509,6 @@ function AuthScreen() {
                 );
               })}
             </View>
-
             <Input
               label="E-post"
               value={email}
@@ -3645,6 +3644,7 @@ function PasswordResetScreen({ onDone }: { onDone: () => void }) {
               secureTextEntry
               returnKeyType="done"
             />
+            </View>
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
@@ -4776,7 +4776,6 @@ function HomeScreen({
       scrollEventThrottle={16}
     >
       <PlayrPattern />
-      <Text style={styles.heroTitle}>Markedsplassen der neste kamp starter.</Text>
       <Text style={styles.heroText}>
         En enklere hverdag for trenere.
       </Text>
@@ -4794,6 +4793,9 @@ function HomeScreen({
 
       <View style={styles.homeWordmarkSlot}>
         <PlayrWordmark large />
+        <Text style={styles.homeWordmarkTagline}>
+          Mer tid til aktivitet.Mindre tid til administrasjon
+        </Text>
       </View>
 
       {pendingIncomingCount > 0 || approvedMyRequestsCount > 0 || chatMessageCount > 0 || matchingMatchCount > 0 ? (
@@ -5620,10 +5622,16 @@ function CreateMatchModal({
   const dateOptions = getDateDropdownOptions(form.date);
   const timeOptions = getTimeDropdownOptions(form.time);
   const createMatchScrollRef = useRef<ScrollView>(null);
+  const [createMatchCommentY, setCreateMatchCommentY] = useState(0);
   const scrollToCreateMatchComment = () => {
     const delay = Platform.OS === "android" ? 320 : 140;
     setTimeout(() => {
-      createMatchScrollRef.current?.scrollToEnd({ animated: true });
+      const fallbackY = Platform.OS === "android" ? 430 : 340;
+      const offset = Platform.OS === "android" ? 190 : 150;
+      createMatchScrollRef.current?.scrollTo({
+        y: Math.max((createMatchCommentY || fallbackY) - offset, 0),
+        animated: true
+      });
     }, delay);
   };
 
@@ -5679,6 +5687,7 @@ function CreateMatchModal({
               }
             />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
+            <View onLayout={(event) => setCreateMatchCommentY(event.nativeEvent.layout.y)}>
             <Input
               label="Kommentar"
               value={form.comment}
@@ -5687,6 +5696,7 @@ function CreateMatchModal({
               multiline
               onFocus={scrollToCreateMatchComment}
             />
+            </View>
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
@@ -5724,10 +5734,16 @@ function EditMatchModal({
   onSubmit: () => void;
 }) {
   const editMatchScrollRef = useRef<ScrollView>(null);
+  const [editMatchCommentY, setEditMatchCommentY] = useState(0);
   const scrollToEditMatchComment = () => {
     const delay = Platform.OS === "android" ? 320 : 140;
     setTimeout(() => {
-      editMatchScrollRef.current?.scrollToEnd({ animated: true });
+      const fallbackY = Platform.OS === "android" ? 430 : 340;
+      const offset = Platform.OS === "android" ? 190 : 150;
+      editMatchScrollRef.current?.scrollTo({
+        y: Math.max((editMatchCommentY || fallbackY) - offset, 0),
+        animated: true
+      });
     }, delay);
   };
 
@@ -5785,6 +5801,7 @@ function EditMatchModal({
               }
             />
             <Input label="Type" value={form.matchType} onChangeText={(matchType) => onChange({ ...form, matchType })} placeholder="Eks: Treningskamp" />
+            <View onLayout={(event) => setEditMatchCommentY(event.nativeEvent.layout.y)}>
             <Input
               label="Kommentar"
               value={form.comment}
@@ -5793,6 +5810,7 @@ function EditMatchModal({
               multiline
               onFocus={scrollToEditMatchComment}
             />
+            </View>
 
             {feedback ? <Text style={styles.formFeedback}>{feedback}</Text> : null}
 
@@ -7375,7 +7393,7 @@ function createStyles(colors: typeof lightColors) {
   return StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: colors.greenDark
+    backgroundColor: colors.background
   },
   app: {
     flex: 1,
@@ -7594,7 +7612,7 @@ function createStyles(colors: typeof lightColors) {
   header: {
     backgroundColor: colors.green,
     paddingHorizontal: 22,
-    minHeight: Platform.OS === "android" ? 118 : 92,
+    minHeight: Platform.OS === "android" ? 89 : 69,
     justifyContent: "center",
     overflow: "visible",
     paddingBottom: 0,
@@ -7602,7 +7620,7 @@ function createStyles(colors: typeof lightColors) {
     zIndex: 10
   },
   headerHome: {
-    minHeight: Platform.OS === "android" ? 128 : 104
+    minHeight: Platform.OS === "android" ? 96 : 78
   },
   headerPatternArc: {
     borderColor: "rgba(255, 255, 255, 0.14)",
@@ -7952,6 +7970,14 @@ function createStyles(colors: typeof lightColors) {
     marginBottom: 52,
     marginTop: 58,
     minHeight: 86
+  },
+  homeWordmarkTagline: {
+    color: colors.greenDark,
+    fontSize: 17,
+    fontWeight: "600",
+    lineHeight: 25,
+    marginTop: 18,
+    textAlign: "center"
   },
   featuredArea: {
     marginTop: 0
