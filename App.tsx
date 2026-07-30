@@ -23,7 +23,6 @@ import {
   TouchableOpacity,
   type TextInputProps,
   type TextProps,
-  useWindowDimensions,
   View
 } from "react-native";
 import {
@@ -5643,24 +5642,23 @@ function CreateMatchModal({
   const dateOptions = getDateDropdownOptions(form.date);
   const timeOptions = getTimeDropdownOptions(form.time);
   const createMatchScrollRef = useRef<ScrollView>(null);
-  const { height: createMatchWindowHeight } = useWindowDimensions();
   const createMatchKeyboardHeight = useKeyboardHeight();
   const [createMatchCommentY, setCreateMatchCommentY] = useState(0);
+  const createMatchFormStyle = [
+    styles.form,
+    { paddingBottom: Math.max(createMatchKeyboardHeight + 260, 420) }
+  ];
   const scrollToCreateMatchComment = () => {
-    const delay = Platform.OS === "android" ? 320 : 140;
-    setTimeout(() => {
-      const estimatedKeyboardHeight =
-        Platform.OS === "android" ? Math.max(createMatchWindowHeight * 0.38, 280) : 300;
-      const activeKeyboardHeight = Math.max(createMatchKeyboardHeight, estimatedKeyboardHeight);
-      const availableHeight = Math.max(createMatchWindowHeight - activeKeyboardHeight - 120, 240);
-      const preferredTop = Math.max(availableHeight - 130, 110);
-      const targetY = Math.max(createMatchCommentY - preferredTop, 0);
-
+    const scrollToComment = () => {
       createMatchScrollRef.current?.scrollTo({
-        y: targetY,
+        y: createMatchCommentY > 0 ? Math.max(createMatchCommentY - 80, 0) : 9999,
         animated: true
       });
-    }, delay);
+    };
+
+    [120, 320, 650].forEach((delay) => {
+      setTimeout(scrollToComment, delay);
+    });
   };
 
   return (
@@ -5677,7 +5675,7 @@ function CreateMatchModal({
           <ScrollView
             ref={createMatchScrollRef}
             style={styles.modalScroll}
-            contentContainerStyle={styles.form}
+            contentContainerStyle={createMatchFormStyle}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
@@ -5762,24 +5760,23 @@ function EditMatchModal({
   onSubmit: () => void;
 }) {
   const editMatchScrollRef = useRef<ScrollView>(null);
-  const { height: editMatchWindowHeight } = useWindowDimensions();
   const editMatchKeyboardHeight = useKeyboardHeight();
   const [editMatchCommentY, setEditMatchCommentY] = useState(0);
+  const editMatchFormStyle = [
+    styles.form,
+    { paddingBottom: Math.max(editMatchKeyboardHeight + 260, 420) }
+  ];
   const scrollToEditMatchComment = () => {
-    const delay = Platform.OS === "android" ? 320 : 140;
-    setTimeout(() => {
-      const estimatedKeyboardHeight =
-        Platform.OS === "android" ? Math.max(editMatchWindowHeight * 0.38, 280) : 300;
-      const activeKeyboardHeight = Math.max(editMatchKeyboardHeight, estimatedKeyboardHeight);
-      const availableHeight = Math.max(editMatchWindowHeight - activeKeyboardHeight - 120, 240);
-      const preferredTop = Math.max(availableHeight - 130, 110);
-      const targetY = Math.max(editMatchCommentY - preferredTop, 0);
-
+    const scrollToComment = () => {
       editMatchScrollRef.current?.scrollTo({
-        y: targetY,
+        y: editMatchCommentY > 0 ? Math.max(editMatchCommentY - 80, 0) : 9999,
         animated: true
       });
-    }, delay);
+    };
+
+    [120, 320, 650].forEach((delay) => {
+      setTimeout(scrollToComment, delay);
+    });
   };
 
   if (!match) {
@@ -5801,7 +5798,7 @@ function EditMatchModal({
           <ScrollView
             ref={editMatchScrollRef}
             style={styles.modalScroll}
-            contentContainerStyle={styles.form}
+            contentContainerStyle={editMatchFormStyle}
             keyboardDismissMode="on-drag"
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
