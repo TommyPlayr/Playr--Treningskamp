@@ -2,25 +2,17 @@
   "expo": {
     "name": "Playr",
     "slug": "playr-treningskamp",
-    "version": "1.0.1",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "scheme": "playr",
-    "userInterfaceStyle": "dark",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#07110B"
-    },
+    "userInterfaceStyle": "light",
     "assetBundlePatterns": [
       "**/*"
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.playrmatch.playr",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "bundleIdentifier": "com.playrmatch.playr"
     },
     "android": {
       "package": "com.playrmatch.playr",
@@ -34,6 +26,15 @@
     },
     "plugins": [
       "expo-notifications",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#07110B",
+          "image": "./assets/splash.png",
+          "resizeMode": "contain",
+          "imageWidth": 160
+        }
+      ],
       [
         "expo-build-properties",
         {
